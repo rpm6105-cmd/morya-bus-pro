@@ -1,0 +1,232 @@
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Calculator, 
+  MapPin, 
+  Building2,
+  FileText, 
+  Settings, 
+  UserCircle,
+  LogOut,
+  Shield,
+  Bus,
+  BarChart3,
+  UserCog,
+  Clock,
+  Calendar
+} from 'lucide-react';
+import { useAuth } from '../../lib/context/AuthContext';
+import { dataService } from '../../lib/services/dataService';
+
+const Sidebar = () => {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAdmin, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
+  const handleResetData = () => {
+    if (confirm('This will reset all data. Are you sure?')) {
+      dataService.resetAllData();
+      window.location.reload();
+    }
+  };
+
+  const adminMenuItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Employees', icon: Users, path: '/employees' },
+    { name: 'Attendance', icon: Calendar, path: '/attendance' },
+    { name: 'Overtime', icon: Clock, path: '/overtime' },
+    { name: 'Payroll', icon: Calculator, path: '/payroll' },
+    { name: 'Depots', icon: Building2, path: '/depots' },
+    { name: 'Reports', icon: BarChart3, path: '/reports' },
+    { name: 'User Management', icon: UserCog, path: '/users' },
+    { name: 'Settings', icon: Settings, path: '/settings' },
+  ];
+
+  const hrMenuItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Employees', icon: Users, path: '/employees' },
+    { name: 'Attendance', icon: Calendar, path: '/attendance' },
+    { name: 'Overtime', icon: Clock, path: '/overtime' },
+    { name: 'Payroll', icon: Calculator, path: '/payroll' },
+    { name: 'Reports', icon: BarChart3, path: '/reports' },
+  ];
+
+  const menuItems = isAdmin ? adminMenuItems : hrMenuItems;
+
+  return (
+    <aside style={styles.sidebar}>
+      <div style={{ marginBottom: '2.5rem' }}>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Bus size={24} color="#10b981" />
+          HRMS <span style={{ color: '#10b981', fontSize: '0.75rem' }}>PRO</span>
+        </h1>
+        <p style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em', marginTop: '0.25rem' }}>
+          MORYA BUS SERVICES
+        </p>
+      </div>
+
+      <nav style={{ flex: 1, overflowY: 'auto' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.path;
+            return (
+              <li key={item.name} style={{ marginBottom: '0.25rem' }}>
+                <Link 
+                  href={item.path} 
+                  style={{
+                    ...styles.navLink,
+                    background: isActive ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                    color: isActive ? '#10b981' : '#94a3b8',
+                    fontWeight: isActive ? 600 : 400,
+                    borderLeft: isActive ? '3px solid #10b981' : '3px solid transparent',
+                  }}
+                >
+                  <Icon size={18} />
+                  {item.name}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <div style={{ marginTop: 'auto', padding: '1rem 0' }}>
+        <div style={styles.userCard}>
+          <div style={styles.userHeader}>
+            <div style={styles.userAvatar}>
+              {user?.name?.charAt(0) || 'U'}
+            </div>
+            <div style={styles.userInfo}>
+              <p style={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</p>
+              <p style={styles.userRole}>
+                <Shield size={10} /> {isAdmin ? 'Administrator' : 'HR Manager'}
+              </p>
+            </div>
+          </div>
+          
+          {isAdmin && (
+            <div style={styles.depotBadge}>
+              <MapPin size={12} />
+              <span>All Depots</span>
+            </div>
+          )}
+
+          <div style={styles.userActions}>
+            <button onClick={handleLogout} style={styles.logoutBtn}>
+              <LogOut size={14} />
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  sidebar: {
+    width: '260px',
+    minWidth: '260px',
+    height: '100vh',
+    background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
+    padding: '1.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'fixed',
+    left: 0,
+    top: 0,
+  },
+  navLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    padding: '0.75rem 1rem',
+    borderRadius: '8px',
+    textDecoration: 'none',
+    transition: 'all 0.2s ease',
+    fontSize: '0.875rem',
+  },
+  userCard: {
+    background: 'rgba(255,255,255,0.05)',
+    borderRadius: '12px',
+    padding: '1rem',
+  },
+  userHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    marginBottom: '0.75rem',
+  },
+  userAvatar: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #10b981, #3b82f6)',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 700,
+    fontSize: '14px',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: '0.875rem',
+    fontWeight: 600,
+    color: '#fff',
+    margin: 0,
+  },
+  userRole: {
+    fontSize: '0.7rem',
+    color: '#94a3b8',
+    margin: '2px 0 0',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  depotBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 8px',
+    background: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: '4px',
+    fontSize: '0.65rem',
+    color: '#10b981',
+    fontWeight: 500,
+    marginBottom: '0.75rem',
+  },
+  userActions: {
+    display: 'flex',
+    gap: '0.5rem',
+  },
+  logoutBtn: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    padding: '0.5rem',
+    fontSize: '0.75rem',
+    color: '#ef4444',
+    background: 'transparent',
+    border: '1px solid rgba(239, 68, 68, 0.2)',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+};
+
+export default Sidebar;
