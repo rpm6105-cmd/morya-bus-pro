@@ -115,12 +115,17 @@ const Sidebar = () => {
             </div>
           </div>
           
-          {isAdmin && (
+          {isAdmin ? (
             <div style={styles.depotBadge}>
               <MapPin size={12} />
               <span>All Depots</span>
             </div>
-          )}
+          ) : user?.depotId ? (
+            <div style={styles.depotBadge}>
+              <MapPin size={12} />
+              <span>{dataService.getBranchById(user.depotId)?.name || 'Unknown Depot'}</span>
+            </div>
+          ) : null}
 
           <div style={styles.userActions}>
             <button onClick={handleLogout} style={styles.logoutBtn}>
