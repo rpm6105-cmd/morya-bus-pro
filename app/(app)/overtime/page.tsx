@@ -458,10 +458,27 @@ export default function OvertimePage() {
                             <div style={styles.miniAvatar}>{emp?.name?.charAt(0) || '?'}</div>
                             <div>
                               <p style={{ fontWeight: '500', margin: 0 }}>{emp?.name || 'Unknown'}</p>
-                              <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0' }}>
-                                {emp?.employeeId || 'N/A'} • {baseDepot} {isTemp && ` ➔ ${workedDepot}`}
+                              <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {emp?.employeeId || 'N/A'} • {workedDepot}
+                                <span style={{ 
+                                  padding: '2px 6px', 
+                                  borderRadius: '4px', 
+                                  fontSize: '9px', 
+                                  fontWeight: '700',
+                                  background: isTemp ? '#fffbeb' : '#f1f5f9',
+                                  color: isTemp ? '#d97706' : '#64748b',
+                                  border: isTemp ? '1px solid #fde68a' : '1px solid #e2e8f0',
+                                  textTransform: 'uppercase'
+                                }}>
+                                  {isTemp ? 'Temporary' : 'Permanent'}
+                                </span>
                               </p>
-                              <p style={{ fontSize: '10px', color: '#94a3b8', margin: '2px 0 0' }}>
+                              {isTemp && (
+                                <p style={{ fontSize: '10px', color: '#94a3b8', margin: '1px 0 0' }}>
+                                  Base Depot: {baseDepot}
+                                </p>
+                              )}
+                              <p style={{ fontSize: '10px', color: '#94a3b8', margin: '1px 0 0' }}>
                                 Logged by: {entry.createdBy || 'System'}
                               </p>
                             </div>
