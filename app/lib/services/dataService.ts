@@ -346,9 +346,7 @@ class DataService {
           .filter(a => a.depotId === depotId && a.startDate <= monthEnd && a.endDate >= monthStart)
           .map(a => a.employeeId);
       } else {
-        tempEmployeeIds = this.assignments
-          .filter(a => a.depotId === depotId)
-          .map(a => a.employeeId);
+        tempEmployeeIds = [];
       }
       
       const tempEmployees = this.employees.filter(e => tempEmployeeIds.includes(e.id));
