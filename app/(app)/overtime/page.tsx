@@ -37,7 +37,10 @@ export default function OvertimePage() {
     setBranches(branchList);
 
     const depotId = isAdmin ? selectedBranch : user?.depotId;
-    const empList = dataService.getEmployees(depotId, undefined, selectedMonth, selectedYear);
+    const empList = isAdmin
+      ? dataService.getEmployees(depotId)
+      : dataService.getEmployees(depotId, undefined, selectedMonth, selectedYear);
+
     setEmployees(empList.filter(e => e.status === 'ACTIVE'));
 
     const otEntries = dataService.getOvertime(undefined, selectedMonth, selectedYear);
@@ -237,11 +240,33 @@ export default function OvertimePage() {
       <div style={styles.filters}>
         {isAdmin && (
           <>
-            <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} style={styles.select}>
+            <select 
+              value={selectedBranch} 
+              onChange={(e) => {
+                setSelectedBranch(e.target.value);
+                setSelectedEmpId('');
+              }} 
+              style={styles.select}
+            >
               <option value="">All Depots</option>
               {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
-            <select value={selectedEmpId} onChange={(e) => setSelectedEmpId(e.target.value)} style={{ ...styles.select, minWidth: '250px' }}>
+            <select 
+              value={selectedEmpId} 
+              onChange={(e) => {
+                const empId = e.target.value;
+                setSelectedEmpId(empId);
+                if (empId) {
+                  // Find the employee in the full un-filtered list first
+                  const fullEmpList = dataService.getEmployees();
+                  const emp = fullEmpList.find(x => x.id === empId);
+                  if (emp && emp.branchId) {
+                    setSelectedBranch(emp.branchId);
+                  }
+                }
+              }} 
+              style={{ ...styles.select, minWidth: '250px' }}
+            >
               <option value="">All Employees</option>
               {filteredEmployees.map(e => (
                 <option key={e.id} value={e.id}>{e.employeeId} - {e.name}</option>
