@@ -698,7 +698,7 @@ const styles: Record<string, React.CSSProperties> = {
   settingsLabel: { fontSize: '13px', color: '#64748b' },
   settingsValue: { fontSize: '14px', fontWeight: '600', color: '#0f172a' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: '#fff', borderRadius: '12px', padding: '24px', width: '90%', maxWidth: '450px' },
+  modal: { background: '#fff', borderRadius: '12px', padding: '24px', width: '90%', maxWidth: '450px', maxHeight: '90vh', overflowY: 'auto' },
   label: { display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' },
   input: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' },
   typeBtn: { flex: 1, padding: '12px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '500', cursor: 'pointer', transition: 'all 0.2s' },
