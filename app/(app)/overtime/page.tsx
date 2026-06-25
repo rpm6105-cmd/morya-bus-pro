@@ -26,6 +26,7 @@ export default function OvertimePage() {
   const [newOtDate, setNewOtDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [settings, setSettings] = useState<any>({ overtimeSettings: { hourlyRate: 50, fullDayRate: 300, maxHourlyOvertime: 4, maxFullDayOvertime: 10 } });
   const [activeDepotInfo, setActiveDepotInfo] = useState<{ id: string; name: string; isTemp: boolean } | null>(null);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
     loadData();
@@ -42,6 +43,7 @@ export default function OvertimePage() {
       : dataService.getEmployees(depotId, undefined, selectedMonth, selectedYear);
 
     setEmployees(empList.filter(e => e.status === 'ACTIVE'));
+    setAllEmployees(dataService.getEmployees());
 
     const otEntries = dataService.getOvertime(undefined, selectedMonth, selectedYear);
     setOvertimeEntries(otEntries);
@@ -133,6 +135,7 @@ export default function OvertimePage() {
       rate: newOtRate,
       amount: newOtAmount,
       depotId: activeDepotInfo?.id || selectedEmployee?.branchId,
+      createdBy: user?.name || (isAdmin ? 'Administrator' : 'HR Manager'),
       reason: newOtReason.trim(),
       status: 'PENDING'
     });
@@ -430,7 +433,7 @@ export default function OvertimePage() {
                 </thead>
                 <tbody>
                   {empOvertime.map(entry => {
-                    const emp = employees.find(e => e.id === entry.employeeId);
+                    const emp = allEmployees.find(e => e.id === entry.employeeId);
                     const badge = getStatusBadge(entry.status);
                     const BadgeIcon = badge.icon;
                     const calculatedAmount = entry.amount || (
@@ -444,6 +447,10 @@ export default function OvertimePage() {
                       ? `₹${entry.rate}/${entry.type === 'HOURLY' ? 'hr' : 'day'}` 
                       : (entry.type === 'HOURLY' ? `₹${settings.overtimeSettings.hourlyRate}/hr` : `₹${settings.overtimeSettings.fullDayRate}/day`);
 
+                    const baseDepot = branches.find(b => b.id === emp?.branchId)?.name || 'Unknown';
+                    const workedDepot = branches.find(b => b.id === entry.depotId)?.name || baseDepot;
+                    const isTemp = entry.depotId && entry.depotId !== emp?.branchId;
+
                     return (
                       <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={styles.td}>
@@ -451,8 +458,11 @@ export default function OvertimePage() {
                             <div style={styles.miniAvatar}>{emp?.name?.charAt(0) || '?'}</div>
                             <div>
                               <p style={{ fontWeight: '500', margin: 0 }}>{emp?.name || 'Unknown'}</p>
-                              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>
-                                {emp?.employeeId} • {branches.find(b => b.id === (entry.depotId || emp?.branchId))?.name || 'Unknown'}
+                              <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0' }}>
+                                {emp?.employeeId || 'N/A'} • {baseDepot} {isTemp && ` ➔ ${workedDepot}`}
+                              </p>
+                              <p style={{ fontSize: '10px', color: '#94a3b8', margin: '2px 0 0' }}>
+                                Logged by: {entry.createdBy || 'System'}
                               </p>
                             </div>
                           </div>

@@ -142,6 +142,7 @@ export interface OvertimeEntry {
   rate?: number;
   amount?: number;
   depotId?: string;
+  createdBy?: string;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   approvedBy?: string;
