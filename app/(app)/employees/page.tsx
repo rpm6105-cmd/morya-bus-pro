@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { Employee, Branch } from '../../lib/types';
+import { Employee, Branch, EmployeeAssignment } from '../../lib/types';
 import {
   Search, Filter, Plus, ChevronDown, ChevronUp, Edit2, Trash2, 
   Eye, Download, X, User, Mail, Phone, MapPin, Calendar,
@@ -27,6 +27,12 @@ export default function EmployeesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [assignments, setAssignments] = useState<EmployeeAssignment[]>([]);
+  const [showAddAssignment, setShowAddAssignment] = useState(false);
+  const [assignDepotId, setAssignDepotId] = useState('');
+  const [assignStartDate, setAssignStartDate] = useState('');
+  const [assignEndDate, setAssignEndDate] = useState('');
+  const [assignReason, setAssignReason] = useState('Employee shortage');
   const itemsPerPage = 20;
 
   useEffect(() => {
@@ -101,6 +107,46 @@ export default function EmployeesPage() {
   const handleViewEmployee = (emp: Employee) => {
     setSelectedEmployee(emp);
     setShowDetailModal(true);
+    setAssignments(dataService.getAssignments(emp.id));
+    setShowAddAssignment(false);
+  };
+
+  const handleAddAssignment = () => {
+    if (!selectedEmployee) return;
+    if (!assignDepotId || !assignStartDate || !assignEndDate) {
+      toast.error('Please fill all assignment fields');
+      return;
+    }
+    if (assignStartDate > assignEndDate) {
+      toast.error('Start date cannot be after end date');
+      return;
+    }
+
+    dataService.addAssignment({
+      employeeId: selectedEmployee.id,
+      depotId: assignDepotId,
+      startDate: assignStartDate,
+      endDate: assignEndDate,
+      reason: assignReason.trim()
+    });
+
+    toast.success('Temporary assignment added successfully');
+    setAssignments(dataService.getAssignments(selectedEmployee.id));
+    setShowAddAssignment(false);
+    setAssignDepotId('');
+    setAssignStartDate('');
+    setAssignEndDate('');
+    setAssignReason('Employee shortage');
+  };
+
+  const handleDeleteAssignment = (asgId: string) => {
+    if (confirm('Are you sure you want to delete this temporary assignment?')) {
+      dataService.deleteAssignment(asgId);
+      toast.success('Assignment deleted');
+      if (selectedEmployee) {
+        setAssignments(dataService.getAssignments(selectedEmployee.id));
+      }
+    }
   };
 
   const handleDeleteEmployee = (emp: Employee) => {
@@ -416,6 +462,129 @@ export default function EmployeesPage() {
                   <div><label>ESIC</label><p>{selectedEmployee.esicNumber || 'N/A'}</p></div>
                   <div><label>PF Enabled</label><p>{selectedEmployee.pfEnabled ? 'Yes' : 'No'}</p></div>
                 </div>
+              </div>
+              
+              <div style={{ ...styles.detailSection, borderTop: '1px solid #e2e8f0', marginTop: '16px', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={styles.sectionTitle}>Temporary Depot Assignments</h4>
+                  <button 
+                    onClick={() => {
+                      setShowAddAssignment(!showAddAssignment);
+                      setAssignDepotId('');
+                    }} 
+                    style={{
+                      background: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Plus size={12} />
+                    {showAddAssignment ? 'Hide Form' : 'Add Assignment'}
+                  </button>
+                </div>
+
+                {showAddAssignment && (
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Temporary Depot</label>
+                        <select
+                          value={assignDepotId}
+                          onChange={e => setAssignDepotId(e.target.value)}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+                        >
+                          <option value="">Select Depot...</option>
+                          {branches.filter(b => b.id !== selectedEmployee.branchId).map(b => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Reason</label>
+                        <input
+                          type="text"
+                          value={assignReason}
+                          onChange={e => setAssignReason(e.target.value)}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Start Date</label>
+                        <input
+                          type="date"
+                          value={assignStartDate}
+                          onChange={e => setAssignStartDate(e.target.value)}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>End Date</label>
+                        <input
+                          type="date"
+                          value={assignEndDate}
+                          onChange={e => setAssignEndDate(e.target.value)}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      onClick={handleAddAssignment} 
+                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginTop: '4px' }}
+                    >
+                      Save Temporary Assignment
+                    </button>
+                  </div>
+                )}
+
+                {assignments.length === 0 ? (
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No temporary assignments logged</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                          <th style={{ padding: '6px 4px' }}>Depot</th>
+                          <th style={{ padding: '6px 4px' }}>Period</th>
+                          <th style={{ padding: '6px 4px' }}>Reason</th>
+                          <th style={{ padding: '6px 4px', textAlign: 'right' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assignments.map(asg => {
+                          const depot = branches.find(b => b.id === asg.depotId);
+                          return (
+                            <tr key={asg.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '6px 4px', fontWeight: '500' }}>{depot?.name || 'Unknown'}</td>
+                              <td style={{ padding: '6px 4px', color: '#475569' }}>
+                                {new Date(asg.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - {new Date(asg.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              </td>
+                              <td style={{ padding: '6px 4px', color: '#64748b' }}>{asg.reason}</td>
+                              <td style={{ padding: '6px 4px', textAlign: 'right' }}>
+                                <button 
+                                  onClick={() => handleDeleteAssignment(asg.id)} 
+                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                                  title="Delete Assignment"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
             <div style={styles.modalFooter}>

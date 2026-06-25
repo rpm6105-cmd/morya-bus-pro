@@ -18,6 +18,8 @@ export default function DepotsPage() {
   const [editingIncentive, setEditingIncentive] = useState(false);
   const [incentiveType, setIncentiveType] = useState<'FIXED' | 'PERCENTAGE'>('FIXED');
   const [incentiveValue, setIncentiveValue] = useState(0);
+  const [hourlyOvertimeRate, setHourlyOvertimeRate] = useState(0);
+  const [fullDayOvertimeRate, setFullDayOvertimeRate] = useState(0);
 
   useEffect(() => {
     loadBranches();
@@ -49,7 +51,9 @@ export default function DepotsPage() {
     const updatedBranch = {
       ...selectedBranch,
       incentiveType,
-      incentiveValue
+      incentiveValue,
+      hourlyOvertimeRate: hourlyOvertimeRate || undefined,
+      fullDayOvertimeRate: fullDayOvertimeRate || undefined
     };
     
     const allBranches = dataService.getBranches();
@@ -60,7 +64,7 @@ export default function DepotsPage() {
       setBranches(allBranches);
       setSelectedBranch(updatedBranch);
       setEditingIncentive(false);
-      toast.success('Incentive updated successfully');
+      toast.success('Incentive and Overtime rates updated successfully');
     }
   };
 
@@ -213,7 +217,7 @@ export default function DepotsPage() {
                   {editingIncentive ? (
                     <div style={styles.editForm}>
                       <div style={styles.formRow}>
-                        <label>Type</label>
+                        <label>Incentive Type</label>
                         <select
                           value={incentiveType}
                           onChange={(e) => setIncentiveType(e.target.value as 'FIXED' | 'PERCENTAGE')}
@@ -224,11 +228,29 @@ export default function DepotsPage() {
                         </select>
                       </div>
                       <div style={styles.formRow}>
-                        <label>Value</label>
+                        <label>Incentive Value</label>
                         <input
                           type="number"
                           value={incentiveValue}
                           onChange={(e) => setIncentiveValue(Number(e.target.value))}
+                          style={styles.input}
+                        />
+                      </div>
+                      <div style={styles.formRow}>
+                        <label>Hourly Overtime Rate (₹)</label>
+                        <input
+                          type="number"
+                          value={hourlyOvertimeRate}
+                          onChange={(e) => setHourlyOvertimeRate(Number(e.target.value))}
+                          style={styles.input}
+                        />
+                      </div>
+                      <div style={styles.formRow}>
+                        <label>Full Day Overtime Rate (₹)</label>
+                        <input
+                          type="number"
+                          value={fullDayOvertimeRate}
+                          onChange={(e) => setFullDayOvertimeRate(Number(e.target.value))}
                           style={styles.input}
                         />
                       </div>
@@ -244,24 +266,45 @@ export default function DepotsPage() {
                     </div>
                   ) : (
                     <div style={styles.incentiveDisplay}>
-                      <div>
-                        <span style={styles.currentIncentive}>
-                          {selectedBranch.incentiveType === 'FIXED' 
-                            ? `₹${selectedBranch.incentiveValue}` 
-                            : `${selectedBranch.incentiveValue}%`}
-                        </span>
-                        <span style={styles.incentiveType}>
-                          ({selectedBranch.incentiveType === 'FIXED' ? 'Per Employee' : 'of Basic Salary'})
-                        </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block', textTransform: 'uppercase' }}>Incentive</span>
+                            <span style={styles.currentIncentive}>
+                              {selectedBranch.incentiveType === 'FIXED' 
+                                ? `₹${selectedBranch.incentiveValue}` 
+                                : `${selectedBranch.incentiveValue}%`}
+                            </span>
+                            <span style={styles.incentiveType}>
+                              ({selectedBranch.incentiveType === 'FIXED' ? 'Per Employee' : 'of Basic'})
+                            </span>
+                          </div>
+                          <button onClick={() => {
+                            setEditingIncentive(true);
+                            setIncentiveType(selectedBranch.incentiveType);
+                            setIncentiveValue(selectedBranch.incentiveValue);
+                            setHourlyOvertimeRate(selectedBranch.hourlyOvertimeRate || 50);
+                            setFullDayOvertimeRate(selectedBranch.fullDayOvertimeRate || 300);
+                          }} style={styles.editBtn}>
+                            <Edit2 size={14} />
+                            Edit
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: '24px', marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Hourly Overtime</span>
+                            <span style={{ fontSize: '16px', fontWeight: '600', color: '#334155' }}>
+                              ₹{selectedBranch.hourlyOvertimeRate || 50}/hr
+                            </span>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Full Day Overtime</span>
+                            <span style={{ fontSize: '16px', fontWeight: '600', color: '#334155' }}>
+                              ₹{selectedBranch.fullDayOvertimeRate || 300}/day
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <button onClick={() => {
-                        setEditingIncentive(true);
-                        setIncentiveType(selectedBranch.incentiveType);
-                        setIncentiveValue(selectedBranch.incentiveValue);
-                      }} style={styles.editBtn}>
-                        <Edit2 size={14} />
-                        Edit
-                      </button>
                     </div>
                   )}
                 </div>

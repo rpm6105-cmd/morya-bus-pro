@@ -104,6 +104,8 @@ export interface Branch {
   incentiveType: 'FIXED' | 'PERCENTAGE';
   incentiveValue: number;
   driverMonthlyIncentive: number;
+  hourlyOvertimeRate?: number;
+  fullDayOvertimeRate?: number;
   isActive: boolean;
   subDepots: SubDepot[];
   createdAt: string;
@@ -139,6 +141,7 @@ export interface OvertimeEntry {
   hours?: number;
   rate?: number;
   amount?: number;
+  depotId?: string;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   approvedBy?: string;
@@ -240,3 +243,13 @@ export const ATTENDANCE_STATUS_MAP: Record<AttendanceStatus, { label: string; pa
   'WO': { label: 'Week Off', paid: 'PAID', short: 'WO' },
   'LOP': { label: 'Loss of Pay', paid: 'UNPAID', short: 'LOP' },
 };
+
+export interface EmployeeAssignment {
+  id: string;
+  employeeId: string;
+  depotId: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  reason: string;
+  createdAt: string;
+}

@@ -25,6 +25,7 @@ export default function OvertimePage() {
   const [newOtReason, setNewOtReason] = useState('');
   const [newOtDate, setNewOtDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [settings, setSettings] = useState<any>({ overtimeSettings: { hourlyRate: 50, fullDayRate: 300, maxHourlyOvertime: 4, maxFullDayOvertime: 10 } });
+  const [activeDepotInfo, setActiveDepotInfo] = useState<{ id: string; name: string; isTemp: boolean } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -48,6 +49,29 @@ export default function OvertimePage() {
   }, [employees]);
 
   const selectedEmployee = employees.find(e => e.id === selectedEmpId);
+
+  useEffect(() => {
+    if (!selectedEmployee || !newOtDate) return;
+
+    const assignment = dataService.getAssignmentForEmployeeOnDate(selectedEmployee.id, newOtDate);
+    const activeBranchId = assignment ? assignment.depotId : selectedEmployee.branchId;
+    const activeBranch = branches.find(b => b.id === activeBranchId);
+
+    if (activeBranch) {
+      setActiveDepotInfo({
+        id: activeBranch.id,
+        name: activeBranch.name,
+        isTemp: !!assignment
+      });
+
+      const hourlyRate = activeBranch.hourlyOvertimeRate !== undefined ? activeBranch.hourlyOvertimeRate : settings.overtimeSettings.hourlyRate;
+      const fullDayRate = activeBranch.fullDayOvertimeRate !== undefined ? activeBranch.fullDayOvertimeRate : settings.overtimeSettings.fullDayRate;
+      
+      const rate = newOtType === 'HOURLY' ? hourlyRate : fullDayRate;
+      setNewOtRate(rate);
+      setNewOtAmount(newOtType === 'HOURLY' ? newOtHours * rate : rate);
+    }
+  }, [selectedEmployee, newOtDate, newOtType, newOtHours, branches, settings]);
 
   const empOvertime = selectedEmpId 
     ? overtimeEntries.filter(o => o.employeeId === selectedEmpId)
@@ -103,6 +127,9 @@ export default function OvertimePage() {
       date: newOtDate,
       type: newOtType,
       hours: newOtType === 'HOURLY' ? newOtHours : undefined,
+      rate: newOtRate,
+      amount: newOtAmount,
+      depotId: activeDepotInfo?.id || selectedEmployee?.branchId,
       reason: newOtReason.trim(),
       status: 'PENDING'
     });
@@ -383,11 +410,14 @@ export default function OvertimePage() {
                     const BadgeIcon = badge.icon;
                     const calculatedAmount = entry.amount || (
                       entry.type === 'HOURLY' && entry.hours 
-                        ? entry.hours * settings.overtimeSettings.hourlyRate
+                        ? entry.hours * (entry.rate || settings.overtimeSettings.hourlyRate)
                         : entry.type === 'FULL_DAY' 
-                          ? settings.overtimeSettings.fullDayRate 
+                          ? (entry.rate || settings.overtimeSettings.fullDayRate) 
                           : 0
                     );
+                    const rateDisplay = entry.rate 
+                      ? `₹${entry.rate}/${entry.type === 'HOURLY' ? 'hr' : 'day'}` 
+                      : (entry.type === 'HOURLY' ? `₹${settings.overtimeSettings.hourlyRate}/hr` : `₹${settings.overtimeSettings.fullDayRate}/day`);
 
                     return (
                       <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -396,7 +426,9 @@ export default function OvertimePage() {
                             <div style={styles.miniAvatar}>{emp?.name?.charAt(0) || '?'}</div>
                             <div>
                               <p style={{ fontWeight: '500', margin: 0 }}>{emp?.name || 'Unknown'}</p>
-                              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{emp?.employeeId}</p>
+                              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>
+                                {emp?.employeeId} • {branches.find(b => b.id === (entry.depotId || emp?.branchId))?.name || 'Unknown'}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -417,7 +449,7 @@ export default function OvertimePage() {
                           {entry.type === 'HOURLY' ? `${entry.hours || 0}h` : '1 day'}
                         </td>
                         <td style={styles.td}>
-                          {entry.type === 'HOURLY' ? `₹${settings.overtimeSettings.hourlyRate}/hr` : `₹${settings.overtimeSettings.fullDayRate}/day`}
+                          {rateDisplay}
                         </td>
                         <td style={{ ...styles.td, fontWeight: '600', color: '#10b981' }}>₹{calculatedAmount.toLocaleString()}</td>
                         <td style={styles.td}>
@@ -521,6 +553,17 @@ export default function OvertimePage() {
                 <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>{selectedEmployee.employeeId}</p>
               </div>
             </div>
+
+            {activeDepotInfo && (
+              <div style={{ marginBottom: '16px', padding: '10px', background: activeDepotInfo.isTemp ? '#fffbeb' : '#f0fdf4', border: activeDepotInfo.isTemp ? '1px solid #fef3c7' : '1px solid #dcfce7', borderRadius: '6px' }}>
+                <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: activeDepotInfo.isTemp ? '#b45309' : '#15803d' }}>
+                  Work Location: {activeDepotInfo.name} {activeDepotInfo.isTemp ? '(Temporary Assignment)' : '(Base Depot)'}
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#64748b' }}>
+                  Applicable Rates: ₹{(branches.find(b => b.id === activeDepotInfo.id)?.hourlyOvertimeRate) || settings.overtimeSettings.hourlyRate}/hr • ₹{(branches.find(b => b.id === activeDepotInfo.id)?.fullDayOvertimeRate) || settings.overtimeSettings.fullDayRate}/day
+                </p>
+              </div>
+            )}
 
             <div style={{ marginBottom: '16px' }}>
               <label style={styles.label}>Date</label>

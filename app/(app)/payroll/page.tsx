@@ -67,17 +67,17 @@ export default function PayrollPage() {
     const overtimeEntries = dataService.getOvertime(emp.id, monthIndex, selectedYear);
     const approvedOT = overtimeEntries.filter(o => o.status === 'APPROVED');
     
+    const settings = dataService.getSettings();
     let overtimeHours = 0;
     let overtimeDays = 0;
     let overtimeAmount = 0;
-    
     approvedOT.forEach(ot => {
       if (ot.type === 'HOURLY' && ot.hours) {
         overtimeHours += ot.hours;
-        overtimeAmount += ot.amount || (ot.hours * 50);
+        overtimeAmount += ot.amount || (ot.hours * (ot.rate || settings.overtimeSettings.hourlyRate));
       } else if (ot.type === 'FULL_DAY') {
         overtimeDays++;
-        overtimeAmount += ot.amount || 300;
+        overtimeAmount += ot.amount || (ot.rate || settings.overtimeSettings.fullDayRate);
       }
     });
     

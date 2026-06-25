@@ -2,7 +2,7 @@
 
 import { 
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
-  AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments
+  AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment
 } from '../types';
 
 const BRANCHES_KEY = 'hrms_branches';
@@ -14,6 +14,7 @@ const AUDIT_KEY = 'hrms_audit';
 const SETTINGS_KEY = 'hrms_settings';
 const OVERTIME_KEY = 'hrms_overtime';
 const SUB_DEPOTS_KEY = 'hrms_subdepots';
+const ASSIGNMENTS_KEY = 'hrms_assignments';
 
 class DataService {
   private isInitialized = false;
@@ -25,6 +26,7 @@ class DataService {
   private auditLogs: AuditLog[] = [];
   private overtimeEntries: OvertimeEntry[] = [];
   private subDepots: SubDepot[] = [];
+  private assignments: EmployeeAssignment[] = [];
   private settings: SystemSettings = {
     pfRate: 12,
     esicRate: 0.75,
@@ -56,6 +58,7 @@ class DataService {
     const settings = localStorage.getItem(SETTINGS_KEY);
     const overtime = localStorage.getItem(OVERTIME_KEY);
     const subDepots = localStorage.getItem(SUB_DEPOTS_KEY);
+    const assignments = localStorage.getItem(ASSIGNMENTS_KEY);
 
     this.branches = branches ? JSON.parse(branches) : this.generateBranches();
     this.employees = employees ? JSON.parse(employees) : this.generateEmployees();
@@ -65,6 +68,7 @@ class DataService {
     this.auditLogs = audit ? JSON.parse(audit) : [];
     this.overtimeEntries = overtime ? JSON.parse(overtime) : [];
     this.subDepots = subDepots ? JSON.parse(subDepots) : this.generateSubDepots();
+    this.assignments = assignments ? JSON.parse(assignments) : [];
     this.settings = settings ? JSON.parse(settings) : this.settings;
 
     if (!branches) localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
@@ -139,6 +143,8 @@ class DataService {
       incentiveType: 'FIXED' as const,
       incentiveValue: 2000,
       driverMonthlyIncentive: 2000,
+      hourlyOvertimeRate: 50 + (i % 5) * 15,
+      fullDayOvertimeRate: 300 + (i % 5) * 75,
       isActive: true,
       subDepots: [],
       createdAt: new Date().toISOString()
@@ -569,10 +575,20 @@ class DataService {
     overtimeEntries.forEach(ot => {
       if (ot.type === 'HOURLY' && ot.hours) {
         overtimeHours += ot.hours;
-        overtimeAmount += ot.hours * settings.overtimeSettings.hourlyRate;
+        if (ot.amount) {
+          overtimeAmount += ot.amount;
+        } else {
+          const rate = ot.rate || settings.overtimeSettings.hourlyRate;
+          overtimeAmount += ot.hours * rate;
+        }
       } else if (ot.type === 'FULL_DAY') {
         overtimeDays++;
-        overtimeAmount += settings.overtimeSettings.fullDayRate;
+        if (ot.amount) {
+          overtimeAmount += ot.amount;
+        } else {
+          const rate = ot.rate || settings.overtimeSettings.fullDayRate;
+          overtimeAmount += rate;
+        }
       }
     });
 
@@ -738,6 +754,7 @@ class DataService {
     localStorage.removeItem(AUDIT_KEY);
     localStorage.removeItem(OVERTIME_KEY);
     localStorage.removeItem(SUB_DEPOTS_KEY);
+    localStorage.removeItem(ASSIGNMENTS_KEY);
     this.branches = this.generateBranches();
     this.employees = this.generateEmployees();
     this.attendance = {};
@@ -746,6 +763,7 @@ class DataService {
     this.auditLogs = [];
     this.overtimeEntries = [];
     this.subDepots = this.generateSubDepots();
+    this.assignments = [];
     this.saveAll();
   }
 
@@ -758,6 +776,42 @@ class DataService {
     localStorage.setItem(AUDIT_KEY, JSON.stringify(this.auditLogs));
     localStorage.setItem(OVERTIME_KEY, JSON.stringify(this.overtimeEntries));
     localStorage.setItem(SUB_DEPOTS_KEY, JSON.stringify(this.subDepots));
+    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+  }
+
+  getAssignments(employeeId?: string): EmployeeAssignment[] {
+    this.ensureData();
+    if (employeeId) {
+      return this.assignments.filter(a => a.employeeId === employeeId);
+    }
+    return this.assignments;
+  }
+
+  addAssignment(assignment: Omit<EmployeeAssignment, 'id' | 'createdAt'>): EmployeeAssignment {
+    this.ensureData();
+    const newAssignment: EmployeeAssignment = {
+      ...assignment,
+      id: `asg-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    this.assignments.push(newAssignment);
+    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+    return newAssignment;
+  }
+
+  deleteAssignment(id: string): void {
+    this.ensureData();
+    this.assignments = this.assignments.filter(a => a.id !== id);
+    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+  }
+
+  getAssignmentForEmployeeOnDate(employeeId: string, date: string): EmployeeAssignment | undefined {
+    this.ensureData();
+    return this.assignments.find(a => 
+      a.employeeId === employeeId && 
+      date >= a.startDate && 
+      date <= a.endDate
+    );
   }
 }
 
