@@ -37,7 +37,7 @@ export default function OvertimePage() {
     setBranches(branchList);
 
     const depotId = isAdmin ? selectedBranch : user?.depotId;
-    const empList = dataService.getEmployees(depotId);
+    const empList = dataService.getEmployees(depotId, undefined, selectedMonth, selectedYear);
     setEmployees(empList.filter(e => e.status === 'ACTIVE'));
 
     const otEntries = dataService.getOvertime(undefined, selectedMonth, selectedYear);

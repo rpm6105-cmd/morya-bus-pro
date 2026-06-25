@@ -330,10 +330,38 @@ class DataService {
     return this.subDepots.find(s => s.id === id);
   }
 
-  getEmployees(depotId?: string, subDepotCategory?: string): Employee[] {
+  getEmployees(depotId?: string, subDepotCategory?: string, month?: number, year?: number): Employee[] {
     this.ensureData();
     let filtered = this.employees;
-    if (depotId) filtered = filtered.filter(e => e.branchId === depotId);
+    
+    if (depotId) {
+      const baseEmployees = this.employees.filter(e => e.branchId === depotId);
+      
+      let tempEmployeeIds: string[] = [];
+      if (month !== undefined && year !== undefined) {
+        const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        tempEmployeeIds = this.assignments
+          .filter(a => a.depotId === depotId && a.startDate <= monthEnd && a.endDate >= monthStart)
+          .map(a => a.employeeId);
+      } else {
+        tempEmployeeIds = this.assignments
+          .filter(a => a.depotId === depotId)
+          .map(a => a.employeeId);
+      }
+      
+      const tempEmployees = this.employees.filter(e => tempEmployeeIds.includes(e.id));
+      
+      const combined = [...baseEmployees];
+      tempEmployees.forEach(te => {
+        if (!combined.some(e => e.id === te.id)) {
+          combined.push(te);
+        }
+      });
+      filtered = combined;
+    }
+    
     if (subDepotCategory) filtered = filtered.filter(e => e.subDepotCategory === subDepotCategory);
     return filtered;
   }

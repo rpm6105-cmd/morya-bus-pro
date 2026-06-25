@@ -42,14 +42,14 @@ export default function AttendancePage() {
 
   useEffect(() => {
     loadData();
-  }, [selectedBranch, user]);
+  }, [selectedBranch, user, selectedMonth, selectedYear]);
 
   const loadData = () => {
     const branchList = dataService.getBranches();
     setBranches(branchList);
 
     const depotId = isAdmin ? selectedBranch : user?.depotId;
-    const empList = dataService.getEmployees(depotId);
+    const empList = dataService.getEmployees(depotId, undefined, selectedMonth, selectedYear);
     setEmployees(empList);
 
     const attendanceData = dataService.getAttendance() as Attendance;
