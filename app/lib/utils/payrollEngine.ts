@@ -1,5 +1,6 @@
 import { Employee, Branch, Attendance, AttendanceRecord } from '../types';
 import { startOfMonth, endOfMonth } from 'date-fns';
+import { calculateTieredIncentive } from './incentive';
 
 export interface PayrollResult {
   baseSalary: number;
@@ -27,12 +28,14 @@ export const calculatePayroll = (
   const empAttendance = attendance[employee.id] || {};
   
   let lopDays = 0;
+  let presentDays = 0;
   
   // Only count LOP from the attendance calendar
   Object.entries(empAttendance).forEach(([date, record]) => {
     const d = new Date(date);
     if (d.getMonth() === month && d.getFullYear() === year) {
       if (record.status === 'LOP') lopDays++;
+      if (record.status === 'P') presentDays++;
     }
   });
 
@@ -42,7 +45,9 @@ export const calculatePayroll = (
 
   // Calculate Incentive based on branch
   let incentive = 0;
-  if (branch.incentiveType === 'FIXED') {
+  if (employee.subDepotCategory === 'DRIVERS') {
+    incentive = calculateTieredIncentive(branch, presentDays, 'DRIVERS');
+  } else if (branch.incentiveType === 'FIXED') {
     incentive = branch.incentiveValue;
   } else {
     incentive = (baseSalary * branch.incentiveValue) / 100;

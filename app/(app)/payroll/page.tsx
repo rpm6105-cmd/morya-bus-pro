@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { Employee, PayrollEntry, OvertimeType } from '../../lib/types';
+import { calculateTieredIncentive } from '../../lib/utils/incentive';
 import {
   Calculator, Download, DollarSign, Users, TrendingUp,
   ChevronLeft, ChevronRight, FileText, Printer, CreditCard, Clock
@@ -81,10 +82,15 @@ export default function PayrollPage() {
       }
     });
     
-    const incentive = Math.round(Math.random() * 2000);
-    const driverIncentive = emp.subDepotCategory === 'DRIVERS' && absentDays === 0 && lopDays === 0 
-      ? (dataService.getBranchById(emp.branchId)?.driverMonthlyIncentive || 2000) 
+    const branch = dataService.getBranchById(emp.branchId);
+    const driverIncentive = emp.subDepotCategory === 'DRIVERS'
+      ? calculateTieredIncentive(branch, presentDays, 'DRIVERS')
       : 0;
+    const incentive = emp.subDepotCategory === 'DRIVERS'
+      ? 0
+      : (branch?.incentiveType === 'PERCENTAGE'
+          ? Math.round(emp.salary * ((branch?.incentiveValue || 0) / 100))
+          : (branch?.incentiveValue || 0));
     
     const totalEarnings = grossSalary - lopDeduction + incentive + overtimeAmount + driverIncentive;
     
@@ -135,6 +141,7 @@ export default function PayrollPage() {
           employeeId: emp.id,
           month: selectedMonth,
           year: selectedYear,
+          depotId: emp.branchId,
           ...payroll,
           overtimeType: payroll.overtimeType as OvertimeType | undefined,
           status: 'PROCESSED',
@@ -726,7 +733,7 @@ const styles: Record<string, React.CSSProperties> = {
   chartSection: { marginBottom: '24px' },
   chartCard: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
   chartTitle: { fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 16px' },
-  tableContainer: { background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden' },
+  tableContainer: { background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'auto' },
   tableHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' },
   countBadge: { fontSize: '12px', padding: '4px 10px', background: '#f1f5f9', borderRadius: '12px', color: '#64748b' },
   table: { width: '100%', borderCollapse: 'collapse' },

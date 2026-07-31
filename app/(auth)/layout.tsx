@@ -1,3 +1,5 @@
+'use client';
+
 import { AuthProvider } from "../lib/context/AuthContext";
 import { Toaster } from "react-hot-toast";
 

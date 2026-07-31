@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { StoreProvider } from "../lib/context/StoreContext";
 import { AuthProvider } from "../lib/context/AuthContext";
 import Sidebar from "../components/ui/Sidebar";
@@ -9,6 +12,15 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   return (
     <AuthProvider>
       <StoreProvider>
@@ -21,7 +33,7 @@ export default function AppLayout({
           </div>
         </ProtectedRoute>
         <Toaster 
-          position="top-right" 
+          position={isMobile ? "top-center" : "top-right"} 
           toastOptions={{
             style: {
               background: '#0f172a',

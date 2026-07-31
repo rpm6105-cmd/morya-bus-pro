@@ -2,8 +2,10 @@
 
 import { 
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
-  AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment
+  AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
+  IncentiveTier
 } from '../types';
+import { calculateTieredIncentive, normalizeAadhaar } from '../utils/incentive';
 
 const BRANCHES_KEY = 'hrms_branches';
 const EMPLOYEES_KEY = 'hrms_employees';
@@ -70,6 +72,22 @@ class DataService {
     this.subDepots = subDepots ? JSON.parse(subDepots) : this.generateSubDepots();
     this.assignments = assignments ? JSON.parse(assignments) : [];
     this.settings = settings ? JSON.parse(settings) : this.settings;
+
+    let branchesChanged = false;
+    this.branches = this.branches.map(b => {
+      if (!b.incentiveTiers || b.incentiveTiers.length === 0) {
+        branchesChanged = true;
+        return {
+          ...b,
+          incentiveTiers: [
+            { id: 'tier-1', minDays: 24, maxDays: 25, amount: 2000 },
+            { id: 'tier-2', minDays: 26, maxDays: 30, amount: 3000 }
+          ]
+        };
+      }
+      return b;
+    });
+    if (branchesChanged) localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
 
     if (!branches) localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
     if (!employees) localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
@@ -143,6 +161,10 @@ class DataService {
       incentiveType: 'FIXED' as const,
       incentiveValue: 2000,
       driverMonthlyIncentive: 2000,
+      incentiveTiers: [
+        { id: 'tier-1', minDays: 24, maxDays: 25, amount: 2000 },
+        { id: 'tier-2', minDays: 26, maxDays: 30, amount: 3000 }
+      ],
       hourlyOvertimeRate: 50 + (i % 5) * 15,
       fullDayOvertimeRate: 300 + (i % 5) * 75,
       isActive: true,
@@ -379,6 +401,20 @@ class DataService {
     return this.employees.filter(e => e.masterEmployeeId === masterId);
   }
 
+  getEmployeeByAadhaar(aadhaar: string): Employee[] {
+    this.ensureData();
+    const clean = normalizeAadhaar(aadhaar);
+    if (!clean) return [];
+    return this.employees.filter(e => e.aadharNumber && normalizeAadhaar(e.aadharNumber) === clean);
+  }
+
+  getEmployeeStints(masterId: string): Employee[] {
+    this.ensureData();
+    return this.employees
+      .filter(e => e.masterEmployeeId === masterId)
+      .sort((a, b) => a.joiningDate.localeCompare(b.joiningDate));
+  }
+
   getEmployeeStats(depotId?: string) {
     this.ensureData();
     const employees = depotId ? this.getEmployeesByBranch(depotId) : this.employees;
@@ -411,9 +447,9 @@ class DataService {
     };
   }
 
-  addEmployee(employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt' | 'masterEmployeeId'>): Employee {
+  addEmployee(employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt' | 'masterEmployeeId'>, masterEmployeeId?: string): Employee {
     this.ensureData();
-    const masterId = `MBPL${String(this.employees.length + 1000).padStart(5, '0')}`;
+    const masterId = masterEmployeeId || `MBPL${String(this.employees.length + 1000).padStart(5, '0')}`;
     const newEmployee: Employee = {
       ...employee,
       id: `emp-${Date.now()}`,
@@ -439,7 +475,7 @@ class DataService {
     return this.employees[index];
   }
 
-  transferEmployee(employeeId: string, toDepotId: string): Employee | null {
+  transferEmployee(employeeId: string, toDepotId: string, reason?: string, transferDate?: string, userId?: string): Employee | null {
     this.ensureData();
     const index = this.employees.findIndex(e => e.id === employeeId);
     if (index === -1) return null;
@@ -448,8 +484,8 @@ class DataService {
     const transfer = {
       fromDepotId: employee.branchId,
       toDepotId,
-      transferDate: new Date().toISOString(),
-      reason: 'Inter-depot transfer',
+      transferDate: transferDate ? new Date(transferDate).toISOString() : new Date().toISOString(),
+      reason: reason?.trim() || 'Inter-depot transfer',
       status: 'APPROVED' as const
     };
     
@@ -458,10 +494,17 @@ class DataService {
       branchId: toDepotId,
       baseDepotId: employee.baseDepotId || employee.branchId,
       transferHistory: [...(employee.transferHistory || []), transfer],
+      status: 'ACTIVE',
       updatedAt: new Date().toISOString()
     };
     
     localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
+    
+    if (userId) {
+      this.logAudit(userId, 'EMPLOYEE_TRANSFERRED', 'employees', employeeId,
+        { fromDepotId: transfer.fromDepotId }, { toDepotId: transfer.toDepotId, reason: transfer.reason, date: transfer.transferDate });
+    }
+    
     return this.employees[index];
   }
 
@@ -619,11 +662,13 @@ class DataService {
     });
 
     let driverIncentive = 0;
-    if (employee.subDepotCategory === 'DRIVERS' && absentDays === 0 && branch) {
-      driverIncentive = branch.driverMonthlyIncentive;
+    if (employee.subDepotCategory === 'DRIVERS' && branch) {
+      driverIncentive = calculateTieredIncentive(branch, presentDays, 'DRIVERS');
     }
 
-    const incentive = branch?.incentiveValue || 0;
+    const incentive = employee.subDepotCategory === 'DRIVERS'
+      ? 0
+      : (branch?.incentiveValue || 0);
     const totalEarnings = grossSalary - lopDeduction + overtimeAmount + driverIncentive + incentive;
     
     const pfDeduction = employee.pfEnabled && employee.pfRegistrationStatus === 'COMPLETED' 

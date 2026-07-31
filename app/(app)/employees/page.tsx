@@ -7,11 +7,13 @@ import { Employee, Branch, EmployeeAssignment } from '../../lib/types';
 import {
   Search, Filter, Plus, ChevronDown, ChevronUp, Edit2, Trash2, 
   Eye, Download, X, User, Mail, Phone, MapPin, Calendar,
-  Briefcase, Building2, CreditCard, FileText
+  Briefcase, Building2, CreditCard, FileText, Award, AlertTriangle,
+  ArrowLeftRight, History, ShieldCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
+import { normalizeAadhaar, formatAadhaar, isValidAadhaar } from '../../lib/utils/incentive';
 
 export default function EmployeesPage() {
   const { user, isAdmin } = useAuth();
@@ -34,6 +36,37 @@ export default function EmployeesPage() {
   const [assignEndDate, setAssignEndDate] = useState('');
   const [assignReason, setAssignReason] = useState('Employee shortage');
   const itemsPerPage = 20;
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [aadhaarMatches, setAadhaarMatches] = useState<Employee[]>([]);
+  const [rejoinChoice, setRejoinChoice] = useState<'REJOIN' | 'NEW' | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    aadharNumber: '',
+    dateOfBirth: '',
+    gender: 'MALE' as 'MALE' | 'FEMALE' | 'OTHER',
+    department: 'Drivers',
+    designation: '',
+    branchId: '',
+    salary: 18000,
+    bankAccount: '',
+    ifscCode: '',
+    panNumber: '',
+    joiningDate: new Date().toISOString().split('T')[0],
+    address: '',
+    emergencyContact: '',
+    emergencyPhone: '',
+    status: 'ACTIVE' as Employee['status']
+  });
+
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [transferToDepotId, setTransferToDepotId] = useState('');
+  const [transferDate, setTransferDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transferReason, setTransferReason] = useState('');
+  const [stints, setStints] = useState<Employee[]>([]);
 
   useEffect(() => {
     loadData();
@@ -61,7 +94,8 @@ export default function EmployeesPage() {
         emp.name.toLowerCase().includes(term) ||
         emp.employeeId.toLowerCase().includes(term) ||
         emp.email.toLowerCase().includes(term) ||
-        emp.phone.includes(term)
+        emp.phone.includes(term) ||
+        (emp.aadharNumber && normalizeAadhaar(emp.aadharNumber).includes(normalizeAadhaar(searchTerm)))
       );
     }
 
@@ -108,7 +142,170 @@ export default function EmployeesPage() {
     setSelectedEmployee(emp);
     setShowDetailModal(true);
     setAssignments(dataService.getAssignments(emp.id));
+    setStints(dataService.getEmployeeStints(emp.masterEmployeeId));
     setShowAddAssignment(false);
+    setShowTransferForm(false);
+    setTransferToDepotId('');
+    setTransferDate(new Date().toISOString().split('T')[0]);
+    setTransferReason('');
+  };
+
+  const openAddModal = () => {
+    setEditingEmployee(null);
+    setAadhaarMatches([]);
+    setRejoinChoice(null);
+    setForm({
+      name: '',
+      email: '',
+      phone: '',
+      aadharNumber: '',
+      dateOfBirth: '',
+      gender: 'MALE',
+      department: 'Drivers',
+      designation: '',
+      branchId: branches[0]?.id || '',
+      salary: 18000,
+      bankAccount: '',
+      ifscCode: '',
+      panNumber: '',
+      joiningDate: new Date().toISOString().split('T')[0],
+      address: '',
+      emergencyContact: '',
+      emergencyPhone: '',
+      status: 'ACTIVE'
+    });
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (emp: Employee) => {
+    setEditingEmployee(emp);
+    setAadhaarMatches([]);
+    setRejoinChoice(null);
+    setForm({
+      name: emp.name,
+      email: emp.email,
+      phone: emp.phone,
+      aadharNumber: emp.aadharNumber || '',
+      dateOfBirth: emp.dateOfBirth,
+      gender: emp.gender,
+      department: emp.department,
+      designation: emp.designation,
+      branchId: emp.branchId,
+      salary: emp.salary,
+      bankAccount: emp.bankAccount,
+      ifscCode: emp.ifscCode,
+      panNumber: emp.panNumber || '',
+      joiningDate: emp.joiningDate,
+      address: emp.address,
+      emergencyContact: emp.emergencyContact,
+      emergencyPhone: emp.emergencyPhone,
+      status: emp.status
+    });
+    setShowAddModal(true);
+  };
+
+  const handleSaveEmployee = () => {
+    if (!form.name.trim()) return toast.error('Employee name is required');
+    if (!isValidAadhaar(form.aadharNumber)) return toast.error('Aadhaar number is required and must be 12 digits');
+    if (!form.branchId) return toast.error('Please select a depot');
+    if (!form.salary || form.salary <= 0) return toast.error('Salary must be greater than zero');
+    if (!form.joiningDate) return toast.error('Joining date is required');
+
+    const matches = dataService.getEmployeeByAadhaar(form.aadharNumber)
+      .filter(e => e.id !== editingEmployee?.id);
+
+    if (matches.length > 0 && !rejoinChoice) {
+      setAadhaarMatches(matches);
+      setRejoinChoice(null);
+      toast.error(`Aadhaar already exists for ${matches.length} record(s)`);
+      return;
+    }
+
+    const subDepotCategory: 'DRIVERS' | 'STAFF' = form.department === 'Drivers' ? 'DRIVERS' : 'STAFF';
+
+    const nextEmployeeId = editingEmployee?.employeeId
+      || `MBPL${String(dataService.getEmployees().length + 1001).padStart(5, '0')}`;
+
+    const payload = {
+      employeeId: nextEmployeeId,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      department: form.department,
+      designation: form.designation.trim() || form.department,
+      branchId: form.branchId,
+      subDepotCategory,
+      salary: form.salary,
+      pfEnabled: editingEmployee?.pfEnabled ?? true,
+      pfRegistrationStatus: editingEmployee?.pfRegistrationStatus ?? 'PENDING' as const,
+      pfUanNumber: editingEmployee?.pfUanNumber,
+      esicEnabled: editingEmployee?.esicEnabled ?? false,
+      esicRegistrationStatus: editingEmployee?.esicRegistrationStatus ?? 'PENDING' as const,
+      esicNumber: editingEmployee?.esicNumber,
+      bankAccount: form.bankAccount.trim(),
+      ifscCode: form.ifscCode.trim(),
+      bankName: editingEmployee?.bankName,
+      panNumber: form.panNumber.trim() || undefined,
+      aadharNumber: formatAadhaar(form.aadharNumber),
+      joiningDate: form.joiningDate,
+      status: form.status,
+      address: form.address.trim(),
+      emergencyContact: form.emergencyContact.trim(),
+      emergencyPhone: form.emergencyPhone.trim(),
+      dateOfBirth: form.dateOfBirth,
+      gender: form.gender,
+      documents: editingEmployee?.documents || {},
+      transferHistory: editingEmployee?.transferHistory,
+      baseDepotId: editingEmployee?.baseDepotId,
+      pfMemberId: editingEmployee?.pfMemberId,
+      photoUrl: editingEmployee?.photoUrl,
+      city: editingEmployee?.city,
+      state: editingEmployee?.state,
+      pincode: editingEmployee?.pincode
+    };
+
+    if (editingEmployee) {
+      dataService.updateEmployee(editingEmployee.id, { ...payload, employeeId: editingEmployee.employeeId });
+      toast.success('Employee updated successfully');
+    } else {
+      const masterEmployeeId = rejoinChoice === 'REJOIN' && aadhaarMatches.length > 0
+        ? aadhaarMatches[0].masterEmployeeId
+        : undefined;
+      const emp = dataService.addEmployee(payload as any, masterEmployeeId);
+      if (masterEmployeeId && aadhaarMatches.length > 0) {
+        aadhaarMatches.forEach(m => {
+          if (m.status === 'ACTIVE') {
+            dataService.updateEmployee(m.id, { status: 'INACTIVE' });
+          }
+        });
+        toast.success(`Employee rejoined successfully. Linked to ${aadhaarMatches[0].name}'s record (${aadhaarMatches.length + 1} total stints)`);
+      } else {
+        toast.success('Employee created successfully');
+      }
+    }
+
+    setShowAddModal(false);
+    loadData();
+  };
+
+  const handleTransfer = () => {
+    if (!selectedEmployee) return;
+    if (!transferToDepotId) return toast.error('Please select a destination depot');
+    if (transferToDepotId === selectedEmployee.branchId) return toast.error('Employee is already in that depot');
+    if (!transferDate) return toast.error('Please select a transfer date');
+
+    dataService.transferEmployee(selectedEmployee.id, transferToDepotId, transferReason, transferDate, user?.id);
+
+    const updated = dataService.getEmployeeById(selectedEmployee.id);
+    if (updated) {
+      setSelectedEmployee(updated);
+      setStints(dataService.getEmployeeStints(updated.masterEmployeeId));
+    }
+    setShowTransferForm(false);
+    setTransferToDepotId('');
+    setTransferReason('');
+    toast.success(`Employee transferred to ${branches.find(b => b.id === transferToDepotId)?.name}`);
+    loadData();
   };
 
   const handleAddAssignment = () => {
@@ -163,6 +360,7 @@ export default function EmployeesPage() {
       'Name': emp.name,
       'Email': emp.email,
       'Phone': emp.phone,
+      'Aadhaar': emp.aadharNumber || '',
       'Department': emp.department,
       'Designation': emp.designation,
       'Branch': branches.find(b => b.id === emp.branchId)?.name || '',
@@ -226,6 +424,12 @@ export default function EmployeesPage() {
           <p style={styles.subtitle}>{filteredEmployees.length} employees found</p>
         </div>
         <div style={styles.headerActions}>
+          {isAdmin && (
+            <button style={styles.addButton} onClick={openAddModal}>
+              <Plus size={16} />
+              Add Employee
+            </button>
+          )}
           <button style={styles.exportButton} onClick={handleExportCSV}>
             <Download size={16} />
             Export CSV
@@ -238,7 +442,7 @@ export default function EmployeesPage() {
           <Search size={18} color="#64748b" />
           <input
             type="text"
-            placeholder="Search by name, ID, email, phone..."
+            placeholder="Search by name, ID, email, phone, Aadhaar..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={styles.searchInput}
@@ -277,6 +481,7 @@ export default function EmployeesPage() {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
           <option value="TERMINATED">Terminated</option>
+          <option value="TRANSFERRED">Transferred</option>
         </select>
       </div>
 
@@ -343,8 +548,10 @@ export default function EmployeesPage() {
                   <span style={{
                     ...styles.statusBadge,
                     background: emp.status === 'ACTIVE' ? '#dcfce7' :
+                               emp.status === 'TRANSFERRED' ? '#dbeafe' :
                                emp.status === 'INACTIVE' ? '#fef3c7' : '#fee2e2',
                     color: emp.status === 'ACTIVE' ? '#166534' :
+                           emp.status === 'TRANSFERRED' ? '#1e40af' :
                            emp.status === 'INACTIVE' ? '#92400e' : '#991b1b'
                   }}>
                     {emp.status}
@@ -356,9 +563,14 @@ export default function EmployeesPage() {
                       <Eye size={16} color="#64748b" />
                     </button>
                     {isAdmin && (
-                      <button onClick={() => handleDeleteEmployee(emp)} style={styles.actionBtn} title="Delete">
-                        <Trash2 size={16} color="#ef4444" />
-                      </button>
+                      <>
+                        <button onClick={() => openEditModal(emp)} style={styles.actionBtn} title="Edit">
+                          <Edit2 size={16} color="#3b82f6" />
+                        </button>
+                        <button onClick={() => handleDeleteEmployee(emp)} style={styles.actionBtn} title="Delete">
+                          <Trash2 size={16} color="#ef4444" />
+                        </button>
+                      </>
                     )}
                     <button onClick={() => generateOfferLetter(emp)} style={styles.actionBtn} title="Offer Letter">
                       <FileText size={16} color="#10b981" />
@@ -431,6 +643,34 @@ export default function EmployeesPage() {
                   </div>
                 </div>
                 <div style={styles.detailRow}>
+                  <ShieldCheck size={18} color="#64748b" />
+                  <div>
+                    <label>Aadhaar Number</label>
+                    <p>{selectedEmployee.aadharNumber ? selectedEmployee.aadharNumber : 'N/A'}</p>
+                  </div>
+                </div>
+                <div style={styles.detailRow}>
+                  <Calendar size={18} color="#64748b" />
+                  <div>
+                    <label>Date of Birth</label>
+                    <p>{selectedEmployee.dateOfBirth}</p>
+                  </div>
+                </div>
+                <div style={styles.detailRow}>
+                  <User size={18} color="#64748b" />
+                  <div>
+                    <label>Gender</label>
+                    <p>{selectedEmployee.gender}</p>
+                  </div>
+                </div>
+                <div style={styles.detailRow}>
+                  <Briefcase size={18} color="#64748b" />
+                  <div>
+                    <label>Department / Designation</label>
+                    <p>{selectedEmployee.department} · {selectedEmployee.designation}</p>
+                  </div>
+                </div>
+                <div style={styles.detailRow}>
                   <Building2 size={18} color="#64748b" />
                   <div>
                     <label>Branch</label>
@@ -464,6 +704,161 @@ export default function EmployeesPage() {
                 </div>
               </div>
               
+              <div style={{ ...styles.detailSection, borderTop: '1px solid #e2e8f0', marginTop: '16px', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={styles.sectionTitle}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <History size={14} color="#3b82f6" /> Employment History / Stints
+                    </span>
+                  </h4>
+                </div>
+                {stints.length <= 1 ? (
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No previous stints. This is the first record for this person.</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                          <th style={{ padding: '6px 4px' }}>Stint</th>
+                          <th style={{ padding: '6px 4px' }}>Employee ID</th>
+                          <th style={{ padding: '6px 4px' }}>Depot</th>
+                          <th style={{ padding: '6px 4px' }}>Joining</th>
+                          <th style={{ padding: '6px 4px' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stints.map((stint, idx) => (
+                          <tr key={stint.id} style={{ borderBottom: '1px solid #f1f5f9', background: stint.id === selectedEmployee.id ? '#f0fdf4' : undefined }}>
+                            <td style={{ padding: '6px 4px', fontWeight: '600', color: stint.id === selectedEmployee.id ? '#166534' : '#475569' }}>
+                              {idx + 1}{stint.id === selectedEmployee.id ? ' (current)' : ''}
+                            </td>
+                            <td style={{ padding: '6px 4px', fontFamily: 'monospace' }}>{stint.employeeId}</td>
+                            <td style={{ padding: '6px 4px' }}>{branches.find(b => b.id === stint.branchId)?.name || stint.branchId}</td>
+                            <td style={{ padding: '6px 4px' }}>{stint.joiningDate}</td>
+                            <td style={{ padding: '6px 4px' }}>
+                              <span style={{
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                background: stint.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9',
+                                color: stint.status === 'ACTIVE' ? '#166534' : '#64748b'
+                              }}>{stint.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ ...styles.detailSection, borderTop: '1px solid #e2e8f0', marginTop: '16px', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={styles.sectionTitle}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ArrowLeftRight size={14} color="#10b981" /> Depot Transfers
+                    </span>
+                  </h4>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setShowTransferForm(!showTransferForm)}
+                      style={{
+                        background: showTransferForm ? '#f1f5f9' : '#10b981',
+                        color: showTransferForm ? '#334155' : 'white',
+                        border: 'none',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Plus size={12} />
+                      {showTransferForm ? 'Hide Form' : 'Transfer to Depot'}
+                    </button>
+                  )}
+                </div>
+
+                {showTransferForm && (
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Destination Depot</label>
+                        <select
+                          value={transferToDepotId}
+                          onChange={e => setTransferToDepotId(e.target.value)}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+                        >
+                          <option value="">Select Depot...</option>
+                          {branches.filter(b => b.id !== selectedEmployee.branchId).map(b => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Transfer Date</label>
+                        <input
+                          type="date"
+                          value={transferDate}
+                          onChange={e => setTransferDate(e.target.value)}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Reason</label>
+                      <input
+                        type="text"
+                        value={transferReason}
+                        onChange={e => setTransferReason(e.target.value)}
+                        placeholder="e.g. Route reallocation, staff shortage"
+                        style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <button
+                      onClick={handleTransfer}
+                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginTop: '4px' }}
+                    >
+                      Confirm Transfer
+                    </button>
+                    <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>
+                      Historical attendance and payroll will remain recorded under {branches.find(b => b.id === selectedEmployee.branchId)?.name || 'the old depot'}.
+                    </p>
+                  </div>
+                )}
+
+                {(selectedEmployee.transferHistory?.length || 0) === 0 ? (
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No inter-depot transfers logged</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                          <th style={{ padding: '6px 4px' }}>From</th>
+                          <th style={{ padding: '6px 4px' }}>To</th>
+                          <th style={{ padding: '6px 4px' }}>Date</th>
+                          <th style={{ padding: '6px 4px' }}>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedEmployee.transferHistory!.map((t, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '6px 4px', fontWeight: '500' }}>{branches.find(b => b.id === t.fromDepotId)?.name || t.fromDepotId}</td>
+                            <td style={{ padding: '6px 4px', fontWeight: '500', color: '#10b981' }}>{branches.find(b => b.id === t.toDepotId)?.name || t.toDepotId}</td>
+                            <td style={{ padding: '6px 4px', color: '#475569' }}>{new Date(t.transferDate).toLocaleDateString('en-IN')}</td>
+                            <td style={{ padding: '6px 4px', color: '#64748b' }}>{t.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               <div style={{ ...styles.detailSection, borderTop: '1px solid #e2e8f0', marginTop: '16px', paddingTop: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h4 style={styles.sectionTitle}>Temporary Depot Assignments</h4>
@@ -596,6 +991,188 @@ export default function EmployeesPage() {
           </div>
         </div>
       )}
+
+      {showAddModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowAddModal(false)}>
+          <div style={{ ...styles.modal, maxWidth: '700px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2>{editingEmployee ? `Edit Employee — ${editingEmployee.name}` : 'Add New Employee'}</h2>
+              <button onClick={() => setShowAddModal(false)} style={styles.closeBtn}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Full Name *</label>
+                  <input style={styles.fieldInput} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Employee full name" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Aadhaar Number * (12 digits)</label>
+                  <input
+                    style={{ ...styles.fieldInput, ...(form.aadharNumber && !isValidAadhaar(form.aadharNumber) ? { borderColor: '#ef4444' } : {}) }}
+                    value={form.aadharNumber}
+                    onChange={e => setForm({ ...form, aadharNumber: e.target.value.replace(/[^\d\s]/g, '') })}
+                    placeholder="0000 0000 0000"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Email</label>
+                  <input style={styles.fieldInput} type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Phone</label>
+                  <input style={styles.fieldInput} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="10-digit mobile" inputMode="numeric" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Date of Birth</label>
+                  <input style={styles.fieldInput} type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Gender</label>
+                  <select style={styles.fieldInput} value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as any })}>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Department</label>
+                  <select style={styles.fieldInput} value={form.department} onChange={e => setForm({ ...form, department: e.target.value })}>
+                    {['Drivers', 'Office Staff', 'Operations', 'Maintenance', 'Admin', 'Ticketing', 'Security', 'HR', 'Finance', 'Engineering'].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Designation</label>
+                  <input style={styles.fieldInput} value={form.designation} onChange={e => setForm({ ...form, designation: e.target.value })} placeholder={form.department === 'Drivers' ? 'Driver' : 'Role title'} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Depot *</label>
+                  <select style={styles.fieldInput} value={form.branchId} onChange={e => setForm({ ...form, branchId: e.target.value })}>
+                    <option value="">Select Depot...</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Monthly Salary (₹) *</label>
+                  <input style={styles.fieldInput} type="number" value={form.salary} onChange={e => setForm({ ...form, salary: Number(e.target.value) })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Joining Date *</label>
+                  <input style={styles.fieldInput} type="date" value={form.joiningDate} onChange={e => setForm({ ...form, joiningDate: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Status</label>
+                  <select style={styles.fieldInput} value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Employee['status'] })}>
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                    <option value="TERMINATED">Terminated</option>
+                  </select>
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Bank Account</label>
+                  <input style={styles.fieldInput} value={form.bankAccount} onChange={e => setForm({ ...form, bankAccount: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>IFSC Code</label>
+                  <input style={styles.fieldInput} value={form.ifscCode} onChange={e => setForm({ ...form, ifscCode: e.target.value })} placeholder="SBIN0000000" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>PAN Number</label>
+                  <input style={styles.fieldInput} value={form.panNumber} onChange={e => setForm({ ...form, panNumber: e.target.value })} placeholder="ABCDE1234F" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Emergency Contact</label>
+                  <input style={styles.fieldInput} value={form.emergencyContact} onChange={e => setForm({ ...form, emergencyContact: e.target.value })} placeholder="Name" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Emergency Phone</label>
+                  <input style={styles.fieldInput} value={form.emergencyPhone} onChange={e => setForm({ ...form, emergencyPhone: e.target.value })} inputMode="numeric" />
+                </div>
+                <div style={{ ...styles.fieldGroup, gridColumn: '1 / -1' }}>
+                  <label style={styles.fieldLabel}>Address</label>
+                  <input style={styles.fieldInput} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Residential address" />
+                </div>
+              </div>
+
+              {aadhaarMatches.length > 0 && !rejoinChoice && (
+                <div style={{ marginTop: '16px', padding: '14px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <AlertTriangle size={18} color="#d97706" />
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#92400e' }}>
+                      Aadhaar already exists in the system
+                    </h4>
+                  </div>
+                  <p style={{ margin: '0 0 8px', fontSize: '13px', color: '#78350f' }}>
+                    This Aadhaar belongs to:
+                  </p>
+                  {aadhaarMatches.map(m => (
+                    <div key={m.id} style={{ fontSize: '13px', color: '#78350f', padding: '4px 0', borderBottom: '1px solid #fde68a' }}>
+                      <strong>{m.name}</strong> — {m.employeeId} · {branches.find(b => b.id === m.branchId)?.name || m.branchId} · <span style={{ textTransform: 'capitalize' }}>{m.status.toLowerCase()}</span>
+                    </div>
+                  ))}
+                  <p style={{ margin: '10px 0 0', fontSize: '13px', color: '#78350f' }}>
+                    Is this person rejoining? {editingEmployee ? 'Aadhaar cannot be duplicated across employees.' : 'If they left and are now joining at a different depot, choose "Rejoin" to link this stint to their previous records.'}
+                  </p>
+                  {!editingEmployee && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                      <button
+                        onClick={() => setRejoinChoice('REJOIN')}
+                        style={{ padding: '8px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                      >
+                        Create as Rejoin (link history)
+                      </button>
+                      <button
+                        onClick={() => setRejoinChoice('NEW')}
+                        style={{ padding: '8px 14px', background: '#fff', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                      >
+                        Create as New Employee
+                      </button>
+                    </div>
+                  )}
+                  {editingEmployee && (
+                    <button
+                      onClick={() => setRejoinChoice('NEW')}
+                      style={{ marginTop: '12px', padding: '8px 14px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                    >
+                      I confirm this Aadhaar is correct
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {rejoinChoice === 'REJOIN' && (
+                <div style={{ marginTop: '16px', padding: '12px', background: '#ecfdf5', border: '1px solid #10b981', borderRadius: '8px' }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Award size={16} />
+                    Will be linked as a new stint under {aadhaarMatches[0]?.name}. Any previous active stint will be marked inactive.
+                  </p>
+                </div>
+              )}
+
+              {form.department === 'Drivers' && (
+                <div style={{ marginTop: '14px', padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '12px', color: '#1e40af' }}>
+                  Driver incentive will be applied automatically at payroll based on this depot's attendance tiers (24/26 days structure).
+                </div>
+              )}
+            </div>
+            <div style={styles.modalFooter}>
+              <button onClick={() => setShowAddModal(false)} style={styles.cancelBtn}>
+                Cancel
+              </button>
+              <button onClick={handleSaveEmployee} style={styles.generateBtn}>
+                <Plus size={16} />
+                {editingEmployee ? 'Save Changes' : 'Save Employee'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -626,6 +1203,48 @@ const styles: Record<string, React.CSSProperties> = {
   headerActions: {
     display: 'flex',
     gap: '12px'
+  },
+  addButton: {
+    padding: '10px 16px',
+    background: '#10b981',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#fff',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  fieldGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  fieldLabel: {
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#475569'
+  },
+  fieldInput: {
+    padding: '8px 12px',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    fontSize: '13px',
+    width: '100%',
+    boxSizing: 'border-box',
+    outline: 'none'
+  },
+  cancelBtn: {
+    padding: '10px 16px',
+    background: '#fff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#475569',
+    cursor: 'pointer'
   },
   exportButton: {
     padding: '10px 16px',
@@ -675,7 +1294,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#fff',
     borderRadius: '12px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    overflow: 'hidden'
+    overflow: 'auto'
   },
   table: {
     width: '100%',

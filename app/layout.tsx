@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   description: "Complete HR & Payroll Management System for 30 Depots with 2000+ Employees",
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 3,
+  userScalable: true,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

@@ -91,6 +91,13 @@ export interface SubDepot {
   createdAt: string;
 }
 
+export interface IncentiveTier {
+  id: string;
+  minDays: number;
+  maxDays: number;
+  amount: number;
+}
+
 export interface Branch {
   id: string;
   name: string;
@@ -104,6 +111,7 @@ export interface Branch {
   incentiveType: 'FIXED' | 'PERCENTAGE';
   incentiveValue: number;
   driverMonthlyIncentive: number;
+  incentiveTiers?: IncentiveTier[];
   hourlyOvertimeRate?: number;
   fullDayOvertimeRate?: number;
   isActive: boolean;
@@ -123,6 +131,7 @@ export interface AttendanceRecord {
   outTime?: string;
   remarks?: string;
   isPaid: AttendancePaidStatus;
+  depotId?: string;
 }
 
 export interface Attendance {
@@ -162,6 +171,7 @@ export interface PayrollEntry {
   employeeId: string;
   month: string;
   year: number;
+  depotId?: string;
   basicSalary: number;
   hra: number;
   conveyance: number;

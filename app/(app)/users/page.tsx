@@ -368,7 +368,7 @@ const styles: Record<string, React.CSSProperties> = {
   statCard: { flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
   statValue: { fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 },
   statLabel: { fontSize: '12px', color: '#64748b', margin: 0 },
-  tableContainer: { background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden' },
+  tableContainer: { background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { padding: '14px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' },
   tr: { borderBottom: '1px solid #f1f5f9' },

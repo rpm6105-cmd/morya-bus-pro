@@ -111,7 +111,8 @@ export default function AttendancePage() {
       employeeId: selectedEmpId,
       date: dateStr,
       status: newStatus,
-      isPaid: ATTENDANCE_STATUS_MAP[newStatus].paid
+      isPaid: ATTENDANCE_STATUS_MAP[newStatus].paid,
+      depotId: isAdmin ? selectedBranch : user?.depotId
     };
 
     dataService.setAttendance(selectedEmpId, dateStr, record);
@@ -131,7 +132,8 @@ export default function AttendancePage() {
           employeeId: emp.id,
           date: dateStr,
           status: bulkStatus,
-          isPaid: ATTENDANCE_STATUS_MAP[bulkStatus].paid
+          isPaid: ATTENDANCE_STATUS_MAP[bulkStatus].paid,
+          depotId: isAdmin ? selectedBranch : user?.depotId
         };
         dataService.setAttendance(emp.id, dateStr, record);
       }
@@ -271,7 +273,7 @@ export default function AttendancePage() {
       </div>
 
       {selectedEmployee && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', marginTop: '24px' }}>
+        <div className="attendance-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', marginTop: '24px' }}>
           <div style={styles.calendarCard}>
             <div style={styles.calendarHeader}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (

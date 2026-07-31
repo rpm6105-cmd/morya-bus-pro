@@ -26,7 +26,7 @@ const BusDetailView: React.FC<BusDetailViewProps> = ({ bus, onClose }) => {
       position: 'fixed', 
       top: 0, 
       right: 0, 
-      width: '450px', 
+      width: 'min(450px, 100vw)', 
       height: '100vh', 
       background: 'white', 
       boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', 

@@ -54,6 +54,8 @@ body {
   margin-left: 260px;
   padding: 2rem;
   max-width: 1600px;
+  overflow-y: auto;
+  height: 100vh;
 }
 
 /* Cards */
@@ -245,4 +247,65 @@ tr:hover td {
   padding: 0.5rem;
   font-weight: 600;
   font-size: 0.75rem;
+}
+
+/* Mobile Responsive */
+html, body {
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+    min-height: 100vh;
+    height: auto;
+  }
+  .main-content {
+    margin-left: 0 !important;
+    padding: 1rem !important;
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    overflow-y: visible;
+  }
+  .main-content > div {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .main-content table {
+    min-width: 600px;
+  }
+  .drawer-content {
+    width: calc(100vw - 2rem) !important;
+    max-width: 500px !important;
+  }
+  .attendance-layout {
+    grid-template-columns: 1fr !important;
+  }
+  input, button, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Responsive Grid */
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 1200px) {
+  .grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .grid-cols-4, .grid-cols-3, .grid-cols-2 { grid-template-columns: 1fr; }
+  .sidebar { transform: translateX(-260px); }
+  .main-content { margin-left: 0; }
 }

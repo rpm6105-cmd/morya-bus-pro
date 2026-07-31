@@ -6,9 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open android",
+    "cap:build": "npx cap copy && npx cap sync"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/cli": "^7.6.8",
+    "@capacitor/core": "^7.6.8",
     "date-fns": "^4.1.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",

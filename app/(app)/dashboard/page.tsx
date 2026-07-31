@@ -11,6 +11,14 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
   const [stats, setStats] = useState({
     totalEmployees: 0,
     activeEmployees: 0,
@@ -94,10 +102,10 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
+    <div style={{ ...styles.container, ...(isMobile ? { padding: '16px' } : {}) }}>
+      <div style={{ ...styles.header, ...(isMobile ? { flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '16px' } : {}) }}>
         <div>
-          <h1 style={styles.title}>
+          <h1 style={{ ...styles.title, ...(isMobile ? { fontSize: '20px' } : {}) }}>
             Welcome back, {user?.name?.split(' ')[0] || 'User'}
           </h1>
           <p style={styles.subtitle}>
@@ -105,24 +113,24 @@ export default function DashboardPage() {
           </p>
         </div>
         <div style={styles.headerActions}>
-          <span style={styles.dateBadge}>
+          <span style={{ ...styles.dateBadge, ...(isMobile ? { fontSize: '11px', padding: '4px 10px' } : {}) }}>
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </span>
         </div>
       </div>
 
-      <div style={styles.statsGrid}>
+      <div style={{ ...styles.statsGrid, ...(isMobile ? { gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' } : {}) }}>
         {statCards.map((stat, index) => (
-          <div key={index} style={styles.statCard}>
-            <div style={{ ...styles.statIcon, background: `${stat.color}15` }}>
-              <stat.icon size={24} color={stat.color} />
+          <div key={index} style={{ ...styles.statCard, ...(isMobile ? { padding: '12px', gap: '10px' } : {}) }}>
+            <div style={{ ...styles.statIcon, ...(isMobile ? { width: '36px', height: '36px', borderRadius: '8px' } : {}), background: `${stat.color}15` }}>
+              <stat.icon size={isMobile ? 18 : 24} color={stat.color} />
             </div>
             <div style={styles.statContent}>
-              <p style={styles.statLabel}>{stat.label}</p>
-              <p style={styles.statValue}>{stat.value}</p>
+              <p style={{ ...styles.statLabel, ...(isMobile ? { fontSize: '11px' } : {}) }}>{stat.label}</p>
+              <p style={{ ...styles.statValue, ...(isMobile ? { fontSize: '18px' } : {}) }}>{stat.value}</p>
             </div>
             {stat.trend && (
-              <span style={{ ...styles.statTrend, color: stat.color }}>
+              <span style={{ ...styles.statTrend, color: stat.color, ...(isMobile ? { fontSize: '10px', top: '8px', right: '8px' } : {}) }}>
                 {stat.trend}
               </span>
             )}
@@ -130,14 +138,14 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div style={styles.chartsGrid}>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>Employees by Department</h3>
+      <div style={{ ...styles.chartsGrid, ...(isMobile ? { gridTemplateColumns: '1fr', gap: '12px' } : {}) }}>
+        <div style={{ ...styles.chartCard, ...(isMobile ? { padding: '12px' } : {}) }}>
+          <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Employees by Department</h3>
           <div style={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
               <BarChart data={stats.departmentData}>
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+                <XAxis dataKey="name" tick={{ fontSize: isMobile ? 10 : 12 }} />
+                <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -145,17 +153,17 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>Employees by Gender</h3>
+        <div style={{ ...styles.chartCard, ...(isMobile ? { padding: '12px' } : {}) }}>
+          <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Employees by Gender</h3>
           <div style={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
               <PieChart>
                 <Pie
                   data={stats.genderData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
+                  innerRadius={isMobile ? 40 : 60}
+                  outerRadius={isMobile ? 70 : 100}
                   paddingAngle={5}
                   dataKey="value"
                 >
@@ -166,7 +174,7 @@ export default function DashboardPage() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div style={styles.legendContainer}>
+            <div style={{ ...styles.legendContainer, ...(isMobile ? { gap: '12px', marginTop: '8px' } : {}) }}>
               {stats.genderData.map((item, index) => (
                 <div key={index} style={styles.legendItem}>
                   <span style={{ ...styles.legendDot, background: item.color }} />
@@ -178,13 +186,13 @@ export default function DashboardPage() {
         </div>
 
         {isAdmin && (
-          <div style={styles.chartCard}>
-            <h3 style={styles.chartTitle}>Top 10 Depots by Employees</h3>
+          <div style={{ ...styles.chartCard, ...(isMobile ? { padding: '12px' } : {}) }}>
+            <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Top 10 Depots by Employees</h3>
             <div style={styles.chartContainer}>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.depotData} layout="vertical">
-                  <XAxis type="number" tick={{ fontSize: 12 }} />
-                  <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} width={60} />
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
+                <BarChart data={stats.depotData} layout={isMobile ? 'horizontal' : 'vertical'}>
+                  <XAxis dataKey={isMobile ? 'name' : undefined} type={isMobile ? 'category' : undefined} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                  <YAxis dataKey={isMobile ? undefined : 'name'} type={isMobile ? undefined : 'category'} tick={{ fontSize: isMobile ? 10 : 12 }} width={isMobile ? undefined : 60} />
                   <Tooltip />
                   <Bar dataKey="employees" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -194,42 +202,42 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div style={styles.bottomGrid}>
-        <div style={styles.activityCard}>
-          <h3 style={styles.chartTitle}>Recent Activity</h3>
+      <div style={{ ...styles.bottomGrid, ...(isMobile ? { gridTemplateColumns: '1fr', gap: '12px' } : {}) }}>
+        <div style={{ ...styles.activityCard, ...(isMobile ? { padding: '12px' } : {}) }}>
+          <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Recent Activity</h3>
           <div style={styles.activityList}>
             {recentActivity.map((activity, index) => (
-              <div key={activity.id} style={styles.activityItem}>
-                <div style={{ ...styles.activityIcon, background: `${activity.color}15` }}>
-                  <activity.icon size={18} color={activity.color} />
+              <div key={activity.id} style={{ ...styles.activityItem, ...(isMobile ? { padding: '8px', gap: '8px' } : {}) }}>
+                <div style={{ ...styles.activityIcon, background: `${activity.color}15`, ...(isMobile ? { width: '28px', height: '28px' } : {}) }}>
+                  <activity.icon size={isMobile ? 14 : 18} color={activity.color} />
                 </div>
                 <div style={styles.activityContent}>
-                  <p style={styles.activityAction}>{activity.action}</p>
-                  <p style={styles.activityMeta}>{activity.user} • {activity.time}</p>
+                  <p style={{ ...styles.activityAction, ...(isMobile ? { fontSize: '12px' } : {}) }}>{activity.action}</p>
+                  <p style={{ ...styles.activityMeta, ...(isMobile ? { fontSize: '10px' } : {}) }}>{activity.user} • {activity.time}</p>
                 </div>
-                <ChevronRight size={16} color="#94a3b8" />
+                <ChevronRight size={isMobile ? 14 : 16} color="#94a3b8" />
               </div>
             ))}
           </div>
         </div>
 
-        <div style={styles.quickActions}>
-          <h3 style={styles.chartTitle}>Quick Actions</h3>
-          <div style={styles.actionsGrid}>
-            <button style={styles.actionButton}>
-              <UserCheck size={20} />
+        <div style={{ ...styles.quickActions, ...(isMobile ? { padding: '12px' } : {}) }}>
+          <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Quick Actions</h3>
+          <div style={{ ...styles.actionsGrid, ...(isMobile ? { gap: '8px' } : {}) }}>
+            <button style={{ ...styles.actionButton, ...(isMobile ? { padding: '12px', fontSize: '11px', gap: '6px' } : {}) }}>
+              <UserCheck size={isMobile ? 16 : 20} />
               <span>Add Employee</span>
             </button>
-            <button style={styles.actionButton}>
-              <Wallet size={20} />
+            <button style={{ ...styles.actionButton, ...(isMobile ? { padding: '12px', fontSize: '11px', gap: '6px' } : {}) }}>
+              <Wallet size={isMobile ? 16 : 20} />
               <span>Process Payroll</span>
             </button>
-            <button style={styles.actionButton}>
-              <CalendarCheck size={20} />
+            <button style={{ ...styles.actionButton, ...(isMobile ? { padding: '12px', fontSize: '11px', gap: '6px' } : {}) }}>
+              <CalendarCheck size={isMobile ? 16 : 20} />
               <span>Approve Leaves</span>
             </button>
-            <button style={styles.actionButton}>
-              <Bus size={20} />
+            <button style={{ ...styles.actionButton, ...(isMobile ? { padding: '12px', fontSize: '11px', gap: '6px' } : {}) }}>
+              <Bus size={isMobile ? 16 : 20} />
               <span>View Depots</span>
             </button>
           </div>

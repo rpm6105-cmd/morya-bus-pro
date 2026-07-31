@@ -191,11 +191,11 @@ export default function DocumentsPage() {
                                 <td>Provident Fund (PF)</td>
                                 <td>₹{payroll.pf.toLocaleString()}</td>
                              </tr>
-                             <tr>
-                                <td>Branch Incentive</td>
+                              <tr>
+                                <td>Incentive (Attendance/Depot)</td>
                                 <td>₹{payroll.incentive.toLocaleString()}</td>
-                                <td>ESIC Contribution</td>
-                                <td>₹{payroll.esic.toLocaleString()}</td>
+                                <td>Provident Fund (PF)</td>
+                                <td>₹{payroll.pf.toLocaleString()}</td>
                              </tr>
                              <tr>
                                 <td></td>

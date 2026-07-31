@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -11,8 +11,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,110 +59,68 @@ export default function LoginPage() {
     setLoading(false);
   };
 
+  const s = isMobile ? mobileStyles : desktopStyles;
+
   return (
-    <div style={styles.container}>
-      <div style={styles.leftPanel}>
-        <div style={styles.brandSection}>
-          <div style={styles.logoContainer}>
-            <Bus size={48} color="#10b981" />
+    <div style={s.container}>
+      <div style={s.brandPanel}>
+        <div>
+          <div style={s.logoWrap}>
+            <Bus size={isMobile ? 32 : 48} color="#10b981" />
           </div>
-          <h1 style={styles.brandTitle}>HRMS Pro</h1>
-          <p style={styles.brandSubtitle}>Morya Bus Services</p>
-          <p style={styles.description}>
+          <h1 style={s.brandTitle}>HRMS Pro</h1>
+          <p style={s.brandSub}>Morya Bus Services</p>
+          <p style={s.desc}>
             Complete HR & Payroll Management System for 30 Depots
           </p>
-          <div style={styles.features}>
-            <div style={styles.feature}>
-              <Shield size={20} color="#10b981" />
-              <span>2000+ Employees</span>
-            </div>
-            <div style={styles.feature}>
-              <Bus size={20} color="#10b981" />
-              <span>30 Depots</span>
-            </div>
+          <div style={s.features}>
+            <div style={s.feature}><Shield size={16} color="#10b981" /><span>2000+ Employees</span></div>
+            <div style={s.feature}><Bus size={16} color="#10b981" /><span>30 Depots</span></div>
           </div>
         </div>
       </div>
 
-      <div style={styles.rightPanel}>
-        <div style={styles.formContainer}>
-          <h2 style={styles.formTitle}>Welcome Back</h2>
-          <p style={styles.formSubtitle}>Sign in to your account</p>
+      <div style={s.formPanel}>
+        <div style={s.formInner}>
+          <h2 style={s.formTitle}>Welcome Back</h2>
+          <p style={s.formSub}>Sign in to your account</p>
 
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Email Address</label>
-              <div style={styles.inputWrapper}>
-                <Mail size={18} color="#64748b" style={styles.inputIcon} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@moryabuses.com"
-                  style={styles.input}
-                />
+          <form onSubmit={handleSubmit} style={s.form}>
+            <div style={s.field}>
+              <label style={s.label}>Email</label>
+              <div style={s.inputWrap}>
+                <Mail size={18} color="#64748b" style={s.inputIcon} />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@moryabuses.com" style={s.input} />
               </div>
             </div>
-
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Password</label>
-              <div style={styles.inputWrapper}>
-                <Lock size={18} color="#64748b" style={styles.inputIcon} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  style={styles.input}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={styles.togglePassword}
-                >
-                  {showPassword ? <EyeOff size={18} color="#64748b" /> : <Eye size={18} color="#64748b" />}
-                </button>
+            <div style={s.field}>
+              <label style={s.label}>Password</label>
+              <div style={s.inputWrap}>
+                <Lock size={18} color="#64748b" style={s.inputIcon} />
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" style={s.input} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={s.toggle}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
               </div>
             </div>
-
-            <button type="submit" style={styles.loginButton} disabled={loading}>
+            <button type="submit" style={s.loginBtn} disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
-          <div style={styles.divider}>
-            <span style={styles.dividerText}>Quick Login</span>
-          </div>
+          <div style={s.divider}><span style={s.dividerText}>Quick Login</span></div>
 
-          <div style={styles.quickLoginContainer}>
-            <button
-              onClick={() => quickLogin('admin')}
-              style={styles.quickLoginButton}
-              disabled={loading}
-            >
-              <Shield size={18} />
-              <span>Admin Access</span>
+          <div style={s.quickBtns}>
+            <button onClick={() => quickLogin('admin')} style={s.quickBtn} disabled={loading}>
+              <Shield size={16} /> Admin
             </button>
-            <button
-              onClick={() => quickLogin('hr')}
-              style={styles.quickLoginButton}
-              disabled={loading}
-            >
-              <Bus size={18} />
-              <span>HR Access (Depot 1)</span>
+            <button onClick={() => quickLogin('hr')} style={s.quickBtn} disabled={loading}>
+              <Bus size={16} /> HR (Depot 1)
             </button>
           </div>
 
-          <div style={styles.credentials}>
-            <p style={styles.credentialsTitle}>Demo Credentials</p>
-            <div style={styles.credentialRow}>
-              <span>Admin:</span>
-              <code>admin@moryabuses.com / admin123</code>
-            </div>
-            <div style={styles.credentialRow}>
-              <span>HR:</span>
-              <code>hr.D001@moryabuses.com / hr001</code>
-            </div>
+          <div style={s.creds}>
+            <p style={s.credsTitle}>Demo Credentials</p>
+            <div style={s.credRow}><span>Admin:</span><code>admin@moryabuses.com / admin123</code></div>
+            <div style={s.credRow}><span>HR:</span><code>hr.D001@moryabuses.com / hr001</code></div>
           </div>
         </div>
       </div>
@@ -162,189 +128,62 @@ export default function LoginPage() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    minHeight: '100vh',
-    fontFamily: 'system-ui, -apple-system, sans-serif'
-  },
-  leftPanel: {
-    flex: 1,
-    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px'
-  },
-  brandSection: {
-    textAlign: 'center',
-    maxWidth: '400px'
-  },
-  logoContainer: {
-    width: '80px',
-    height: '80px',
-    background: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '0 auto 24px'
-  },
-  brandTitle: {
-    fontSize: '36px',
-    fontWeight: '700',
-    color: '#fff',
-    margin: '0 0 8px'
-  },
-  brandSubtitle: {
-    fontSize: '18px',
-    color: '#10b981',
-    margin: '0 0 24px'
-  },
-  description: {
-    fontSize: '16px',
-    color: '#94a3b8',
-    margin: '0 0 32px',
-    lineHeight: 1.6
-  },
-  features: {
-    display: 'flex',
-    gap: '24px',
-    justifyContent: 'center'
-  },
-  feature: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: '#e2e8f0',
-    fontSize: '14px'
-  },
-  rightPanel: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px',
-    background: '#f8fafc'
-  },
-  formContainer: {
-    width: '100%',
-    maxWidth: '400px'
-  },
-  formTitle: {
-    fontSize: '28px',
-    fontWeight: '600',
-    color: '#0f172a',
-    margin: '0 0 8px'
-  },
-  formSubtitle: {
-    fontSize: '14px',
-    color: '#64748b',
-    margin: '0 0 32px'
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px'
-  },
-  inputGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px'
-  },
-  label: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#374151'
-  },
-  inputWrapper: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center'
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: '12px',
-    pointerEvents: 'none'
-  },
-  input: {
-    width: '100%',
-    padding: '12px 12px 12px 40px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    fontSize: '14px',
-    outline: 'none',
-    transition: 'border-color 0.2s'
-  },
-  togglePassword: {
-    position: 'absolute',
-    right: '12px',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 0
-  },
-  loginButton: {
-    padding: '12px',
-    background: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'background 0.2s'
-  },
-  divider: {
-    display: 'flex',
-    alignItems: 'center',
-    margin: '32px 0'
-  },
-  dividerText: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: '12px',
-    color: '#94a3b8',
-    textTransform: 'uppercase',
-    letterSpacing: '1px'
-  },
-  quickLoginContainer: {
-    display: 'flex',
-    gap: '12px'
-  },
-  quickLoginButton: {
-    flex: 1,
-    padding: '12px',
-    background: '#fff',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    fontSize: '14px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    transition: 'all 0.2s'
-  },
-  credentials: {
-    marginTop: '32px',
-    padding: '16px',
-    background: '#f1f5f9',
-    borderRadius: '8px'
-  },
-  credentialsTitle: {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#64748b',
-    margin: '0 0 12px',
-    textTransform: 'uppercase'
-  },
-  credentialRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '12px',
-    color: '#475569',
-    marginBottom: '4px'
-  }
+const desktopStyles: Record<string, React.CSSProperties> = {
+  container: { display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  brandPanel: { flex: 1, background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' },
+  logoWrap: { width: '80px', height: '80px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' },
+  brandTitle: { fontSize: '36px', fontWeight: 700, color: '#fff', margin: '0 0 8px', textAlign: 'center' },
+  brandSub: { fontSize: '18px', color: '#10b981', margin: '0 0 24px', textAlign: 'center' },
+  desc: { fontSize: '16px', color: '#94a3b8', margin: '0 0 32px', lineHeight: 1.6, textAlign: 'center' },
+  features: { display: 'flex', gap: '24px', justifyContent: 'center' },
+  feature: { display: 'flex', alignItems: 'center', gap: '8px', color: '#e2e8f0', fontSize: '14px' },
+  formPanel: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', background: '#f8fafc' },
+  formInner: { width: '100%', maxWidth: '400px' },
+  formTitle: { fontSize: '28px', fontWeight: 600, color: '#0f172a', margin: '0 0 8px' },
+  formSub: { fontSize: '14px', color: '#64748b', margin: '0 0 32px' },
+  form: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  field: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  label: { fontSize: '14px', fontWeight: 500, color: '#374151' },
+  inputWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
+  inputIcon: { position: 'absolute', left: '12px', pointerEvents: 'none' },
+  input: { width: '100%', padding: '12px 12px 12px 40px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' },
+  toggle: { position: 'absolute', right: '12px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#64748b' },
+  loginBtn: { padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 500, cursor: 'pointer' },
+  divider: { display: 'flex', alignItems: 'center', margin: '32px 0' },
+  dividerText: { flex: 1, textAlign: 'center', fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' },
+  quickBtns: { display: 'flex', gap: '12px' },
+  quickBtn: { flex: 1, padding: '12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+  creds: { marginTop: '32px', padding: '16px', background: '#f1f5f9', borderRadius: '8px' },
+  credsTitle: { fontSize: '12px', fontWeight: 600, color: '#64748b', margin: '0 0 12px', textTransform: 'uppercase' },
+  credRow: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#475569', marginBottom: '4px' },
+};
+
+const mobileStyles: Record<string, React.CSSProperties> = {
+  container: { display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  brandPanel: { background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' },
+  logoWrap: { width: '56px', height: '56px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' },
+  brandTitle: { fontSize: '24px', fontWeight: 700, color: '#fff', margin: '0 0 4px', textAlign: 'center' },
+  brandSub: { fontSize: '14px', color: '#10b981', margin: '0 0 12px', textAlign: 'center' },
+  desc: { fontSize: '13px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.5, textAlign: 'center' },
+  features: { display: 'flex', gap: '16px', justifyContent: 'center' },
+  feature: { display: 'flex', alignItems: 'center', gap: '6px', color: '#e2e8f0', fontSize: '12px' },
+  formPanel: { flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', background: '#f8fafc' },
+  formInner: { width: '100%', maxWidth: '400px' },
+  formTitle: { fontSize: '22px', fontWeight: 600, color: '#0f172a', margin: '0 0 4px' },
+  formSub: { fontSize: '13px', color: '#64748b', margin: '0 0 24px' },
+  form: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  field: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  label: { fontSize: '13px', fontWeight: 500, color: '#374151' },
+  inputWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
+  inputIcon: { position: 'absolute', left: '12px', pointerEvents: 'none' },
+  input: { width: '100%', padding: '14px 12px 14px 40px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '16px', outline: 'none' },
+  toggle: { position: 'absolute', right: '12px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#64748b' },
+  loginBtn: { padding: '14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer' },
+  divider: { display: 'flex', alignItems: 'center', margin: '24px 0' },
+  dividerText: { flex: 1, textAlign: 'center', fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' },
+  quickBtns: { display: 'flex', gap: '8px' },
+  quickBtn: { flex: 1, padding: '12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' },
+  creds: { marginTop: '24px', padding: '12px', background: '#f1f5f9', borderRadius: '8px' },
+  credsTitle: { fontSize: '11px', fontWeight: 600, color: '#64748b', margin: '0 0 8px', textTransform: 'uppercase' },
+  credRow: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: '#475569', marginBottom: '4px' },
 };

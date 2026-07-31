@@ -348,7 +348,7 @@ const styles: Record<string, React.CSSProperties> = {
   progressBar: { height: '8px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '8px', overflow: 'hidden' },
   progress: { height: '100%', borderRadius: '4px', transition: 'width 0.3s' },
   percentage: { fontSize: '20px', fontWeight: '700', color: '#10b981' },
-  tableSection: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
+  tableSection: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' },
   tr: { borderBottom: '1px solid #f1f5f9' },

@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { Branch } from '../../lib/types';
+import { Branch, IncentiveTier } from '../../lib/types';
 import {
   Building2, MapPin, Phone, Mail, Users, TrendingUp, Edit2,
-  X, Check, Search, Filter
+  X, Check, Search, Filter, Plus, Trash2, Award
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -18,6 +18,7 @@ export default function DepotsPage() {
   const [editingIncentive, setEditingIncentive] = useState(false);
   const [incentiveType, setIncentiveType] = useState<'FIXED' | 'PERCENTAGE'>('FIXED');
   const [incentiveValue, setIncentiveValue] = useState(0);
+  const [incentiveTiers, setIncentiveTiers] = useState<IncentiveTier[]>([]);
   const [hourlyOvertimeRate, setHourlyOvertimeRate] = useState(0);
   const [fullDayOvertimeRate, setFullDayOvertimeRate] = useState(0);
 
@@ -48,10 +49,15 @@ export default function DepotsPage() {
   const handleUpdateIncentive = () => {
     if (!selectedBranch) return;
     
+    const validTiers = incentiveTiers
+      .filter(t => t.minDays > 0 && t.maxDays >= t.minDays && t.amount > 0)
+      .sort((a, b) => a.minDays - b.minDays);
+    
     const updatedBranch = {
       ...selectedBranch,
       incentiveType,
       incentiveValue,
+      incentiveTiers: validTiers,
       hourlyOvertimeRate: hourlyOvertimeRate || undefined,
       fullDayOvertimeRate: fullDayOvertimeRate || undefined
     };
@@ -66,6 +72,22 @@ export default function DepotsPage() {
       setEditingIncentive(false);
       toast.success('Incentive and Overtime rates updated successfully');
     }
+  };
+
+  const handleUpdateTier = (id: string, field: keyof IncentiveTier, value: number) => {
+    setIncentiveTiers(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  const handleAddTier = () => {
+    const maxId = incentiveTiers.reduce((max, t) => {
+      const num = parseInt(t.id.replace('tier-', '')) || 0;
+      return Math.max(max, num);
+    }, 0);
+    setIncentiveTiers(prev => [...prev, { id: `tier-${maxId + 1}`, minDays: 24, maxDays: 26, amount: 2000 }]);
+  };
+
+  const handleRemoveTier = (id: string) => {
+    setIncentiveTiers(prev => prev.filter(t => t.id !== id));
   };
 
   return (
@@ -237,6 +259,56 @@ export default function DepotsPage() {
                         />
                       </div>
                       <div style={styles.formRow}>
+                        <label style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>
+                          Attendance Incentive Tiers (Drivers) — ₹
+                        </label>
+                        <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 8px' }}>
+                          Driver incentive is paid based on present days in the month. Configure per-depot slabs.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {incentiveTiers.map((tier) => (
+                            <div key={tier.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                placeholder="Min days"
+                                value={tier.minDays}
+                                onChange={(e) => handleUpdateTier(tier.id, 'minDays', Number(e.target.value))}
+                                style={styles.input}
+                                title="Minimum present days"
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                placeholder="Max days"
+                                value={tier.maxDays}
+                                onChange={(e) => handleUpdateTier(tier.id, 'maxDays', Number(e.target.value))}
+                                style={styles.input}
+                                title="Maximum present days"
+                              />
+                              <input
+                                type="number"
+                                min={0}
+                                placeholder="₹ Amount"
+                                value={tier.amount}
+                                onChange={(e) => handleUpdateTier(tier.id, 'amount', Number(e.target.value))}
+                                style={styles.input}
+                                title="Incentive amount"
+                              />
+                              <button onClick={() => handleRemoveTier(tier.id)} style={styles.tierDeleteBtn} title="Remove tier">
+                                <Trash2 size={14} color="#ef4444" />
+                              </button>
+                            </div>
+                          ))}
+                          <button onClick={handleAddTier} style={styles.tierAddBtn}>
+                            <Plus size={14} />
+                            Add Tier
+                          </button>
+                        </div>
+                      </div>
+                      <div style={styles.formRow}>
                         <label>Hourly Overtime Rate (₹)</label>
                         <input
                           type="number"
@@ -283,6 +355,12 @@ export default function DepotsPage() {
                             setEditingIncentive(true);
                             setIncentiveType(selectedBranch.incentiveType);
                             setIncentiveValue(selectedBranch.incentiveValue);
+                            setIncentiveTiers(selectedBranch.incentiveTiers?.length
+                              ? selectedBranch.incentiveTiers
+                              : [
+                                  { id: 'tier-1', minDays: 24, maxDays: 25, amount: 2000 },
+                                  { id: 'tier-2', minDays: 26, maxDays: 30, amount: 3000 }
+                                ]);
                             setHourlyOvertimeRate(selectedBranch.hourlyOvertimeRate || 50);
                             setFullDayOvertimeRate(selectedBranch.fullDayOvertimeRate || 300);
                           }} style={styles.editBtn}>
@@ -304,6 +382,23 @@ export default function DepotsPage() {
                             </span>
                           </div>
                         </div>
+                        {(selectedBranch.incentiveTiers?.length || 0) > 0 && (
+                          <div style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', marginBottom: '6px' }}>
+                              <Award size={12} /> Driver Attendance Tiers
+                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {selectedBranch.incentiveTiers!.slice().sort((a, b) => a.minDays - b.minDays).map(tier => (
+                                <div key={tier.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                  <span style={{ color: '#475569' }}>
+                                    {tier.minDays}-{tier.maxDays} days present
+                                  </span>
+                                  <span style={{ fontWeight: '600', color: '#10b981' }}>₹{tier.amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -363,5 +458,7 @@ const styles: Record<string, React.CSSProperties> = {
   input: { padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px' },
   formActions: { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
   cancelBtn: { padding: '8px 16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' },
-  saveBtn: { padding: '8px 16px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }
+  saveBtn: { padding: '8px 16px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' },
+  tierAddBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', background: '#ecfdf5', color: '#047857', border: '1px dashed #10b981', borderRadius: '6px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' },
+  tierDeleteBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }
 };
