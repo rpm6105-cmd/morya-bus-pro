@@ -75,7 +75,7 @@ export default function LoginPage() {
           </p>
           <div style={s.features}>
             <div style={s.feature}><Shield size={16} color="#10b981" /><span>40+ Employees</span></div>
-            <div style={s.feature}><Bus size={16} color="#10b981" /><span>2 Depots</span></div>
+            <div style={s.feature}><Bus size={16} color="#10b981" /><span>1 Depot</span></div>
           </div>
         </div>
       </div>

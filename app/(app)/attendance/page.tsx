@@ -320,6 +320,7 @@ export default function AttendancePage() {
                   <p style={{ fontWeight: '600', margin: 0 }}>{selectedEmployee.name}</p>
                   <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
                     {selectedEmployee.employeeId} • {selectedEmployee.subDepotCategory}
+                    {selectedEmployee.busCategory ? ` • ${selectedEmployee.busCategory === '8 METER' ? '8M Bus' : '12M Bus'}` : ''}
                   </p>
                 </div>
               </div>

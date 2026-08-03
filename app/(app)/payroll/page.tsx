@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { Employee, PayrollEntry, OvertimeType } from '../../lib/types';
-import { calculateTieredIncentive } from '../../lib/utils/incentive';
+import { calculatePayroll as calcPayroll } from '../../lib/utils/payrollCalc';
 import {
   Calculator, Download, DollarSign, Users, TrendingUp,
   ChevronLeft, ChevronRight, FileText, Printer, CreditCard, Clock
@@ -42,91 +42,48 @@ export default function PayrollPage() {
   };
 
   const calculatePayroll = (emp: Employee) => {
-    const basic = Math.round(emp.salary * 0.5);
-    const hra = Math.round(emp.salary * 0.2);
-    const conveyance = Math.round(emp.salary * 0.1);
-    const otherAllowances = emp.salary - basic - hra - conveyance;
-    const grossSalary = emp.salary;
-    
-    const attendance = dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>;
-    let presentDays = 0, absentDays = 0, paidLeaveDays = 0, holidayDays = 0, weekOffDays = 0, lopDays = 0;
-    
-    Object.values(attendance).forEach(record => {
-      switch (record.status) {
-        case 'P': presentDays++; break;
-        case 'A': absentDays++; lopDays++; break;
-        case 'LOP': lopDays++; break;
-        case 'PL': paidLeaveDays++; break;
-        case 'H': holidayDays++; break;
-        case 'WO': weekOffDays++; break;
-      }
+    const calc = calcPayroll({
+      employee: emp,
+      branch: dataService.getBranchById(emp.branchId),
+      attendanceRecords: dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>,
+      overtimeEntries: dataService.getOvertime(emp.id, monthIndex, selectedYear),
+      settings: dataService.getSettings(),
+      month: monthIndex,
+      year: selectedYear,
     });
-
-    const perDaySalary = emp.salary / 30;
-    const lopDeduction = Math.round(lopDays * perDaySalary);
-    
-    const overtimeEntries = dataService.getOvertime(emp.id, monthIndex, selectedYear);
-    const approvedOT = overtimeEntries.filter(o => o.status === 'APPROVED');
-    
-    const settings = dataService.getSettings();
-    let overtimeHours = 0;
-    let overtimeDays = 0;
-    let overtimeAmount = 0;
-    approvedOT.forEach(ot => {
-      if (ot.type === 'HOURLY' && ot.hours) {
-        overtimeHours += ot.hours;
-        overtimeAmount += ot.amount || (ot.hours * (ot.rate || settings.overtimeSettings.hourlyRate));
-      } else if (ot.type === 'FULL_DAY') {
-        overtimeDays++;
-        overtimeAmount += ot.amount || (ot.rate || settings.overtimeSettings.fullDayRate);
-      }
-    });
-    
-    const branch = dataService.getBranchById(emp.branchId);
-    const driverIncentive = emp.subDepotCategory === 'DRIVERS'
-      ? calculateTieredIncentive(branch, presentDays, 'DRIVERS')
-      : 0;
-    const incentive = emp.subDepotCategory === 'DRIVERS'
-      ? 0
-      : (branch?.incentiveType === 'PERCENTAGE'
-          ? Math.round(emp.salary * ((branch?.incentiveValue || 0) / 100))
-          : (branch?.incentiveValue || 0));
-    
-    const totalEarnings = grossSalary - lopDeduction + incentive + overtimeAmount + driverIncentive;
-    
-    const pfDeduction = emp.pfEnabled && emp.pfRegistrationStatus === 'COMPLETED' ? Math.round(basic * 0.12) : 0;
-    const esicDeduction = emp.esicEnabled && emp.esicRegistrationStatus === 'COMPLETED' ? Math.round(totalEarnings * 0.0075) : 0;
-    const tdsDeduction = emp.salary * 12 > 300000 ? Math.round(totalEarnings * 0.05) : 0;
-    
-    const totalDeductions = pfDeduction + esicDeduction + tdsDeduction + lopDeduction;
-    const netSalary = totalEarnings - totalDeductions;
 
     return {
-      basicSalary: basic,
-      hra,
-      conveyance,
-      otherAllowances,
-      grossSalary,
-      presentDays,
-      paidLeaveDays,
-      holidayDays,
-      weekOffDays,
-      absentDays,
-      lopDays,
-      lopDeduction,
-      overtimeHours,
-      overtimeDays,
-      overtimeType: overtimeHours > 0 ? 'HOURLY' : overtimeDays > 0 ? 'FULL_DAY' : undefined,
-      overtimeAmount,
-      driverIncentive,
-      incentive,
-      totalEarnings,
-      pfDeduction,
-      esicDeduction,
-      tdsDeduction,
+      basicSalary: calc.fullBasic,
+      hra: calc.fullHra,
+      conveyance: calc.fullConveyance,
+      otherAllowances: calc.fullAllowances,
+      grossSalary: calc.fullGross,
+      presentDays: calc.presentDays,
+      paidLeaveDays: calc.paidLeaveDays,
+      holidayDays: calc.holidayDays,
+      weekOffDays: calc.weekOffDays,
+      absentDays: calc.absentDays,
+      lopDays: calc.lopDays,
+      lopDeduction: calc.lopDeduction,
+      overtimeHours: calc.overtimeHours,
+      overtimeDays: calc.overtimeDays,
+      overtimeType: calc.overtimeHours > 0 ? 'HOURLY' : calc.overtimeDays > 0 ? 'FULL_DAY' : undefined,
+      overtimeAmount: calc.overtimeAmount,
+      driverIncentive: calc.driverIncentive,
+      incentive: calc.incentive,
+      totalEarnings: calc.totalEarnings,
+      pfDeduction: calc.pfDeduction,
+      esicDeduction: calc.esicDeduction,
+      tdsDeduction: calc.tdsDeduction,
+      ptDeduction: calc.ptDeduction,
       otherDeductions: 0,
-      totalDeductions,
-      netSalary
+      totalDeductions: calc.totalDeductions,
+      netSalary: calc.netSalary,
+      earnedBasic: calc.earnedBasic,
+      earnedHra: calc.earnedHra,
+      earnedConveyance: calc.earnedConveyance,
+      earnedAllowances: calc.earnedAllowances,
+      earnedGross: calc.earnedGross,
     };
   };
 
@@ -157,10 +114,26 @@ export default function PayrollPage() {
     loadData();
   };
 
+  const getCalcForEntry = (entry: PayrollEntry) => {
+    const emp = employees.find(e => e.id === entry.employeeId);
+    if (!emp) return null;
+    return calcPayroll({
+      employee: emp,
+      branch: dataService.getBranchById(emp.branchId),
+      attendanceRecords: dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>,
+      overtimeEntries: dataService.getOvertime(emp.id, monthIndex, selectedYear),
+      settings: dataService.getSettings(),
+      month: monthIndex,
+      year: selectedYear,
+    });
+  };
+
   const generatePayslip = (entry: PayrollEntry) => {
     const emp = employees.find(e => e.id === entry.employeeId);
     const branch = dataService.getBranchById(emp?.branchId || '');
     if (!emp) return;
+    const calc = getCalcForEntry(entry);
+    if (!calc) return;
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -212,7 +185,7 @@ export default function PayrollPage() {
     doc.setFont('helvetica', 'normal');
     doc.text('Department:', col1X, 109);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${emp.department} (${emp.subDepotCategory})`, col1X + 30, 109);
+    doc.text(`${emp.department} (${emp.subDepotCategory}${emp.busCategory ? `, ${emp.busCategory === '8 METER' ? '8M' : '12M'} Bus` : ''})`, col1X + 30, 109);
     
     doc.text('Designation:', col1X, 116);
     doc.setFont('helvetica', 'bold');
@@ -247,11 +220,11 @@ export default function PayrollPage() {
     doc.text('ATTENDANCE & EARNINGS', 15, 138);
     
     const attendanceData = [
-      ['Present Days', entry.presentDays.toString()],
-      ['Paid Leave', entry.paidLeaveDays.toString()],
-      ['Holidays', entry.holidayDays.toString()],
-      ['Week Off', entry.weekOffDays.toString()],
-      ['Absent/LOP', `${entry.absentDays}/${entry.lopDays}`],
+      ['Present Days', calc.presentDays.toString()],
+      ['Paid Leave', calc.paidLeaveDays.toString()],
+      ['Holidays', calc.holidayDays.toString()],
+      ['Week Off', calc.weekOffDays.toString()],
+      ['Absent/LOP', `${calc.absentDays}/${calc.lopDays}`],
     ];
     
     doc.setFont('helvetica', 'normal');
@@ -274,11 +247,11 @@ export default function PayrollPage() {
     doc.text('EARNINGS BREAKUP', 80, 138);
     
     const earningsData = [
-      ['Basic Salary', entry.basicSalary],
-      ['HRA', entry.hra],
-      ['Conveyance', entry.conveyance],
-      ['Other Allowances', entry.otherAllowances],
-      ['Gross Salary', entry.grossSalary],
+      ['Basic Salary', calc.earnedBasic],
+      ['HRA', calc.earnedHra],
+      ['Conveyance', calc.earnedConveyance],
+      ['Other Allowances', calc.earnedAllowances],
+      ['Gross Salary', calc.earnedGross],
     ];
     
     doc.setFont('helvetica', 'normal');
@@ -293,7 +266,7 @@ export default function PayrollPage() {
       yPos += 7;
     });
     
-    doc.line(75, 138, 75, 205);
+    doc.setDrawColor(200, 200, 200);
     doc.line(150, 138, 150, 205);
     
     doc.setTextColor(100, 116, 139);
@@ -301,93 +274,90 @@ export default function PayrollPage() {
     doc.setFont('helvetica', 'bold');
     doc.text('BONUS & INCENTIVES', 155, 138);
     
-    const bonusData = [
-      ['Incentive', entry.incentive],
-      ['Driver Incentive', entry.driverIncentive],
-      ['Overtime Amount', entry.overtimeAmount],
-    ];
-    
-    if ((entry.overtimeHours || 0) > 0 || (entry.overtimeDays || 0) > 0) {
-      bonusData.push([`OT (${entry.overtimeHours || 0}h / ${entry.overtimeDays || 0}d)`, entry.overtimeAmount]);
-    }
+    const bonusData: [string, number][] = [];
+    if (calc.incentive > 0) bonusData.push(['Incentive', calc.incentive]);
+    if (calc.driverIncentive > 0) bonusData.push(['Driver Incentive', calc.driverIncentive]);
+    if (calc.overtimeAmount > 0) bonusData.push([`OT (${calc.overtimeHours}h / ${calc.overtimeDays}d)`, calc.overtimeAmount]);
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     yPos = 148;
     bonusData.forEach(([label, value]) => {
-      if (Number(value) > 0) {
-        doc.text(label + ':', 155, yPos);
-        doc.setTextColor(16, 185, 129);
-        doc.text(`₹${Number(value).toLocaleString()}`, pageWidth - 15, yPos, { align: 'right' });
-        doc.setTextColor(100, 116, 139);
-        yPos += 7;
-      }
+      doc.text(label + ':', 155, yPos);
+      doc.setTextColor(16, 185, 129);
+      doc.text(`₹${Number(value).toLocaleString()}`, pageWidth - 15, yPos, { align: 'right' });
+      doc.setTextColor(100, 116, 139);
+      yPos += 7;
     });
+    const bonusBottom = yPos;
+    
+    const deductionsData: [string, number][] = [
+      ['PF Deduction (12%)', calc.pfDeduction],
+      ['ESIC Deduction (0.75%)', calc.esicDeduction],
+    ];
+    if (calc.tdsDeduction > 0) deductionsData.push(['TDS Deduction', calc.tdsDeduction]);
+    if (calc.ptDeduction > 0) deductionsData.push(['PT Deduction', calc.ptDeduction]);
+    if (calc.lopDeduction > 0) deductionsData.push(['LOP Deduction', calc.lopDeduction]);
+    
+    const boxTop = Math.max(215, Math.max(bonusBottom + 20, 215));
+    const boxHeight = 15 + deductionsData.length * 7 + 7;
     
     doc.setFillColor(255, 251, 235);
-    doc.roundedRect(10, 215, pageWidth - 20, 45, 3, 3, 'F');
+    doc.roundedRect(10, boxTop, pageWidth - 20, boxHeight, 3, 3, 'F');
     
     doc.setTextColor(31, 41, 55);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('DEDUCTIONS', 15, 223);
-    
-    const deductionsData = [
-      ['PF Deduction (12%)', entry.pfDeduction],
-      ['ESIC Deduction (0.75%)', entry.esicDeduction],
-      ['TDS Deduction', entry.tdsDeduction],
-      ['LOP Deduction', entry.lopDeduction],
-    ];
+    doc.text('DEDUCTIONS', 15, boxTop + 8);
     
     doc.setFont('helvetica', 'normal');
-    yPos = 232;
+    yPos = boxTop + 17;
     deductionsData.forEach(([label, value]) => {
-      if (Number(value) > 0) {
-        doc.text(label + ':', 15, yPos);
-        doc.setTextColor(239, 68, 68);
-        doc.text(`-₹${Number(value).toLocaleString()}`, 70, yPos);
-        doc.setTextColor(31, 41, 55);
-        yPos += 7;
-      }
+      doc.text(label + ':', 15, yPos);
+      doc.setTextColor(239, 68, 68);
+      doc.text(`-₹${Number(value).toLocaleString()}`, 70, yPos);
+      doc.setTextColor(31, 41, 55);
+      yPos += 7;
     });
     
-    doc.setTextColor(31, 41, 55);
     doc.text('Total Deductions:', 15, yPos);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(239, 68, 68);
-    doc.text(`-₹${entry.totalDeductions.toLocaleString()}`, 70, yPos);
+    doc.text(`-₹${calc.totalDeductions.toLocaleString()}`, 70, yPos);
     
     doc.setTextColor(31, 41, 55);
-    doc.text('Total Earnings:', 155, yPos - 7);
+    doc.text('Total Earnings:', 155, yPos);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129);
-    doc.text(`₹${entry.totalEarnings.toLocaleString()}`, pageWidth - 15, yPos - 7, { align: 'right' });
+    doc.text(`₹${calc.totalEarnings.toLocaleString()}`, pageWidth - 15, yPos, { align: 'right' });
     
+    const netTop = boxTop + boxHeight + 10;
     doc.setFillColor(16, 185, 129);
-    doc.roundedRect(10, 265, pageWidth - 20, 30, 3, 3, 'F');
+    doc.roundedRect(10, netTop, pageWidth - 20, 30, 3, 3, 'F');
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('NET PAY', 15, 278);
+    doc.text('NET PAY', 15, netTop + 13);
     
     doc.setFontSize(20);
-    const netSalaryText = `₹${entry.netSalary.toLocaleString()}`;
-    doc.text(netSalaryText, pageWidth - 15, 280, { align: 'right' });
+    const netSalaryText = `₹${calc.netSalary.toLocaleString()}`;
+    doc.text(netSalaryText, pageWidth - 15, netTop + 15, { align: 'right' });
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    const netWords = numberToWords(entry.netSalary);
-    doc.text(`Rupees: ${netWords} Only`, 15, 288);
+    const netWords = numberToWords(calc.netSalary);
+    doc.text(`Rupees: ${netWords} Only`, 15, netTop + 23);
     
+    const footerTop = netTop + 36;
     doc.setFillColor(249, 250, 251);
-    doc.rect(0, 300, pageWidth, 50, 'F');
+    doc.rect(0, footerTop, pageWidth, 60, 'F');
     
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(7);
-    doc.text('Authorised Signatory', pageWidth / 2, 320, { align: 'center' });
-    doc.text('This is a computer-generated document. No signature required.', pageWidth / 2, 330, { align: 'center' });
-    doc.text('Morya Bus Services - HRMS Pro | www.moryabuses.com', pageWidth / 2, 340, { align: 'center' });
+    doc.text('Authorised Signatory', pageWidth / 2, footerTop + 20, { align: 'center' });
+    doc.text('This is a computer-generated document. No signature required.', pageWidth / 2, footerTop + 30, { align: 'center' });
+    doc.text('Morya Bus Services - HRMS Pro | www.moryabuses.com', pageWidth / 2, footerTop + 40, { align: 'center' });
 
     doc.save(`Payslip_${emp.employeeId}_${selectedMonth}_${selectedYear}.pdf`);
     toast.success('Payslip generated');
@@ -640,7 +610,10 @@ export default function PayrollPage() {
         )}
       </div>
 
-      {showPayslip && selectedEntry && (
+      {showPayslip && selectedEntry && (() => {
+        const previewCalc = getCalcForEntry(selectedEntry);
+        if (!previewCalc) return null;
+        return (
         <div style={styles.modalOverlay} onClick={() => setShowPayslip(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
@@ -655,49 +628,58 @@ export default function PayrollPage() {
               <div style={styles.payslipBody}>
                 <div className="payslip-section">
                   <h4>ATTENDANCE</h4>
-                  <div style={styles.salaryRow}><span>Present Days</span><span>{selectedEntry.presentDays}</span></div>
-                  <div style={styles.salaryRow}><span>Paid Leave</span><span>{selectedEntry.paidLeaveDays}</span></div>
-                  <div style={styles.salaryRow}><span>Holidays</span><span>{selectedEntry.holidayDays}</span></div>
-                  <div style={styles.salaryRow}><span>Week Off</span><span>{selectedEntry.weekOffDays}</span></div>
-                  <div style={styles.salaryRow}><span>Absent/LOP</span><span>{selectedEntry.absentDays}/{selectedEntry.lopDays}</span></div>
+                  <div style={styles.salaryRow}><span>Present Days</span><span>{previewCalc.presentDays}</span></div>
+                  <div style={styles.salaryRow}><span>Paid Leave</span><span>{previewCalc.paidLeaveDays}</span></div>
+                  <div style={styles.salaryRow}><span>Holidays</span><span>{previewCalc.holidayDays}</span></div>
+                  <div style={styles.salaryRow}><span>Week Off</span><span>{previewCalc.weekOffDays}</span></div>
+                  <div style={styles.salaryRow}><span>Absent/LOP</span><span>{previewCalc.absentDays}/{previewCalc.lopDays}</span></div>
                 </div>
                 <div className="payslip-section">
                   <h4>EARNINGS</h4>
-                  <div style={styles.salaryRow}><span>Basic Salary</span><span>₹{selectedEntry.basicSalary.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>HRA</span><span>₹{selectedEntry.hra.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>Conveyance</span><span>₹{selectedEntry.conveyance.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>Other Allowances</span><span>₹{selectedEntry.otherAllowances.toLocaleString()}</span></div>
+                  <div style={styles.salaryRow}><span>Basic Salary</span><span>₹{previewCalc.earnedBasic.toLocaleString()}</span></div>
+                  <div style={styles.salaryRow}><span>HRA</span><span>₹{previewCalc.earnedHra.toLocaleString()}</span></div>
+                  <div style={styles.salaryRow}><span>Conveyance</span><span>₹{previewCalc.earnedConveyance.toLocaleString()}</span></div>
+                  <div style={styles.salaryRow}><span>Other Allowances</span><span>₹{previewCalc.earnedAllowances.toLocaleString()}</span></div>
                   <div style={{ ...styles.salaryRow, fontWeight: 'bold', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
-                    <span>Gross Salary</span><span>₹{selectedEntry.grossSalary.toLocaleString()}</span>
+                    <span>Gross Salary</span><span>₹{previewCalc.earnedGross.toLocaleString()}</span>
                   </div>
                 </div>
                 <div className="payslip-section">
                   <h4>BONUS & INCENTIVES</h4>
-                  <div style={styles.salaryRow}><span>Incentive</span><span style={{ color: '#10b981' }}>₹{selectedEntry.incentive.toLocaleString()}</span></div>
-                  {selectedEntry.driverIncentive > 0 && (
-                    <div style={styles.salaryRow}><span>Driver Incentive</span><span style={{ color: '#10b981' }}>₹{selectedEntry.driverIncentive.toLocaleString()}</span></div>
+                  {previewCalc.incentive > 0 && (
+                    <div style={styles.salaryRow}><span>Incentive</span><span style={{ color: '#10b981' }}>₹{previewCalc.incentive.toLocaleString()}</span></div>
                   )}
-                  {selectedEntry.overtimeAmount > 0 && (
-                    <div style={styles.salaryRow}><span>Overtime ({selectedEntry.overtimeHours || 0}h)</span><span style={{ color: '#10b981' }}>₹{selectedEntry.overtimeAmount.toLocaleString()}</span></div>
+                  {previewCalc.driverIncentive > 0 && (
+                    <div style={styles.salaryRow}><span>Driver Incentive</span><span style={{ color: '#10b981' }}>₹{previewCalc.driverIncentive.toLocaleString()}</span></div>
+                  )}
+                  {previewCalc.overtimeAmount > 0 && (
+                    <div style={styles.salaryRow}><span>Overtime ({previewCalc.overtimeHours}h / {previewCalc.overtimeDays}d)</span><span style={{ color: '#10b981' }}>₹{previewCalc.overtimeAmount.toLocaleString()}</span></div>
                   )}
                 </div>
                 <div className="payslip-section">
                   <h4>DEDUCTIONS</h4>
-                  <div style={styles.salaryRow}><span>PF (12%)</span><span style={{ color: '#ef4444' }}>-₹{selectedEntry.pfDeduction.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>ESIC (0.75%)</span><span style={{ color: '#ef4444' }}>-₹{selectedEntry.esicDeduction.toLocaleString()}</span></div>
-                  {selectedEntry.tdsDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>TDS</span><span style={{ color: '#ef4444' }}>-₹{selectedEntry.tdsDeduction.toLocaleString()}</span></div>
+                  {previewCalc.pfDeduction > 0 && (
+                    <div style={styles.salaryRow}><span>PF (12%)</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.pfDeduction.toLocaleString()}</span></div>
                   )}
-                  {selectedEntry.lopDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>LOP</span><span style={{ color: '#ef4444' }}>-₹{selectedEntry.lopDeduction.toLocaleString()}</span></div>
+                  {previewCalc.esicDeduction > 0 && (
+                    <div style={styles.salaryRow}><span>ESIC (0.75%)</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.esicDeduction.toLocaleString()}</span></div>
+                  )}
+                  {previewCalc.tdsDeduction > 0 && (
+                    <div style={styles.salaryRow}><span>TDS</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.tdsDeduction.toLocaleString()}</span></div>
+                  )}
+                  {previewCalc.ptDeduction > 0 && (
+                    <div style={styles.salaryRow}><span>PT</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.ptDeduction.toLocaleString()}</span></div>
+                  )}
+                  {previewCalc.lopDeduction > 0 && (
+                    <div style={styles.salaryRow}><span>LOP</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.lopDeduction.toLocaleString()}</span></div>
                   )}
                   <div style={{ ...styles.salaryRow, fontWeight: 'bold', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
-                    <span>Total Deductions</span><span style={{ color: '#ef4444' }}>-₹{selectedEntry.totalDeductions.toLocaleString()}</span>
+                    <span>Total Deductions</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.totalDeductions.toLocaleString()}</span>
                   </div>
                 </div>
                 <div style={styles.netPaySection}>
                   <span>NET PAY</span>
-                  <span style={styles.netPayAmount}>₹{selectedEntry.netSalary.toLocaleString()}</span>
+                  <span style={styles.netPayAmount}>₹{previewCalc.netSalary.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -709,7 +691,8 @@ export default function PayrollPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

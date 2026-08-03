@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Morya Bus HRMS Pro - HR & Payroll Management",
-  description: "Complete HR & Payroll Management System for multi-depot bus operations",
+  description: "Complete HR & Payroll Management System for Dharavi depot bus operations",
 };
 
 export const viewport = {

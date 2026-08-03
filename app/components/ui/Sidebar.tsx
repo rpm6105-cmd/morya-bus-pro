@@ -10,6 +10,7 @@ import {
   MapPin, 
   Building2,
   FileText, 
+  FileSpreadsheet,
   Settings, 
   UserCircle,
   LogOut,
@@ -61,6 +62,7 @@ const Sidebar = () => {
     { name: 'Attendance', icon: Calendar, path: '/attendance' },
     { name: 'Overtime', icon: Clock, path: '/overtime' },
     { name: 'Payroll', icon: Calculator, path: '/payroll' },
+    { name: 'Salary Sheet', icon: FileSpreadsheet, path: '/salary-sheet' },
     { name: 'Depots', icon: Building2, path: '/depots' },
     { name: 'Reports', icon: BarChart3, path: '/reports' },
     { name: 'User Management', icon: UserCog, path: '/users' },
@@ -73,6 +75,7 @@ const Sidebar = () => {
     { name: 'Attendance', icon: Calendar, path: '/attendance' },
     { name: 'Overtime', icon: Clock, path: '/overtime' },
     { name: 'Payroll', icon: Calculator, path: '/payroll' },
+    { name: 'Salary Sheet', icon: FileSpreadsheet, path: '/salary-sheet' },
     { name: 'Reports', icon: BarChart3, path: '/reports' },
   ];
 

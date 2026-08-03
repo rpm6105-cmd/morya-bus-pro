@@ -39,13 +39,18 @@ export default function Home() {
         </div>
         <div style={styles.featureCard}>
           <Building2 size={32} color="#10b981" />
-          <h3>2 Depots</h3>
-          <p>Centralized depot management</p>
+          <h3>1 Depot</h3>
+          <p>Dharavi Depot operations</p>
+        </div>
+        <div style={styles.featureCard}>
+          <Bus size={32} color="#f59e0b" />
+          <h3>8M &amp; 12M Buses</h3>
+          <p>Dual bus category fleet</p>
         </div>
         <div style={styles.featureCard}>
           <Shield size={32} color="#8b5cf6" />
           <h3>Role-based Access</h3>
-          <p>1 Admin + 30 HR managers</p>
+          <p>1 Admin + 1 HR manager</p>
         </div>
       </div>
     </div>

@@ -5,7 +5,8 @@ import {
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
   IncentiveTier, User
 } from '../types';
-import { calculateTieredIncentive, normalizeAadhaar } from '../utils/incentive';
+import { normalizeAadhaar } from '../utils/incentive';
+import { calculatePayroll as payrollCalc } from '../utils/payrollCalc';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const BRANCHES_KEY = 'hrms_branches';
@@ -237,37 +238,30 @@ class DataService {
         isActive: true
       }
     ];
-    for (let i = 0; i < 2; i++) {
-      users.push({
-        id: `hr-${String(i + 1).padStart(3, '0')}`,
-        email: `hr.d${String(i + 1).padStart(3, '0')}@moryabuses.com`,
-        password: `hr${String(i + 1).padStart(3, '0')}`,
-        name: `HR Manager - Depot ${i + 1}`,
-        role: 'HR',
-        depotId: `depot-${String(i + 1).padStart(3, '0')}`,
-        createdAt: new Date().toISOString(),
-        isActive: true
-      });
-    }
+    users.push({
+      id: 'hr-001',
+      email: 'hr.d001@moryabuses.com',
+      password: 'hr001',
+      name: 'HR Manager - Dharavi Depo',
+      role: 'HR',
+      depotId: 'depot-001',
+      createdAt: new Date().toISOString(),
+      isActive: true
+    });
     return users;
   }
 
   private generateBranches(): Branch[] {
-    const cities = [
-      { city: 'Mumbai', state: 'Maharashtra' },
-      { city: 'Pune', state: 'Maharashtra' }
-    ];
-
-    return cities.map((loc, i) => ({
-      id: `depot-${String(i + 1).padStart(3, '0')}`,
-      name: `${loc.city} Depot`,
-      code: `D${String(i + 1).padStart(3, '0')}`,
-      manager: `Manager ${i + 1}`,
-      managerPhone: `98765${String(43210 + i).padStart(5, '0')}`,
-      address: `Depot Area, ${loc.city}`,
-      city: loc.city,
-      state: loc.state,
-      pincode: String(400000 + i * 100),
+    return [{
+      id: 'depot-001',
+      name: 'Dharavi Depo',
+      code: 'D01',
+      manager: 'Manager 1',
+      managerPhone: '9876543210',
+      address: 'Dharavi Depot Area, Sion - Dharavi Link Road',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      pincode: '400017',
       incentiveType: 'FIXED' as const,
       incentiveValue: 2000,
       driverMonthlyIncentive: 2000,
@@ -275,12 +269,12 @@ class DataService {
         { id: 'tier-1', minDays: 24, maxDays: 25, amount: 2000 },
         { id: 'tier-2', minDays: 26, maxDays: 30, amount: 3000 }
       ],
-      hourlyOvertimeRate: 50 + (i % 5) * 15,
-      fullDayOvertimeRate: 300 + (i % 5) * 75,
+      hourlyOvertimeRate: 50,
+      fullDayOvertimeRate: 300,
       isActive: true,
       subDepots: [],
       createdAt: new Date().toISOString()
-    }));
+    }];
   }
 
   private generateSubDepots(): SubDepot[] {
@@ -327,15 +321,16 @@ class DataService {
     for (let i = 0; i < 40; i++) {
       const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
       const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-      const dept = departments[Math.floor(Math.random() * departments.length)];
-      const desig = designations[Math.floor(Math.random() * designations.length)];
-      const branchIndex = Math.floor(Math.random() * 2);
+      const isDriver = Math.random() < 0.5;
+      const nonDriverDepts = departments.filter(d => d !== 'Drivers');
+      const dept = isDriver ? 'Drivers' : nonDriverDepts[Math.floor(Math.random() * nonDriverDepts.length)];
+      const desig = isDriver ? 'Bus Driver' : designations[Math.floor(Math.random() * designations.length)];
       const baseSalary = dept === 'Drivers' ? 18000 + Math.random() * 8000 : 
                         dept === 'Operations' ? 20000 + Math.random() * 15000 :
                         15000 + Math.random() * 25000;
       
-      const isDriver = dept === 'Drivers';
       const subDepotCategory = isDriver ? 'DRIVERS' : 'STAFF';
+      const busCategory = isDriver ? (Math.random() > 0.5 ? '8 METER' : '12 METER') : undefined;
 
       const joiningYear = 2015 + Math.floor(Math.random() * 10);
       const joiningMonth = Math.floor(Math.random() * 12);
@@ -354,15 +349,16 @@ class DataService {
         phone: `98765${String(43210 + i).slice(-5)}`,
         department: dept,
         designation: desig,
-        branchId: `depot-${String(branchIndex + 1).padStart(3, '0')}`,
+        branchId: 'depot-001',
         subDepotCategory,
+        busCategory,
         salary: Math.round(baseSalary),
         pfEnabled: Math.random() > 0.3,
         pfRegistrationStatus: Math.random() > 0.5 ? 'COMPLETED' : 'PENDING',
         pfUanNumber: Math.random() > 0.3 ? `12${String(Math.floor(Math.random() * 999999999)).padStart(9, '0')}` : undefined,
         esicEnabled: Math.random() > 0.5,
         esicRegistrationStatus: Math.random() > 0.5 ? 'COMPLETED' : 'PENDING',
-        esicNumber: Math.random() > 0.5 ? `${String(Math.floor(Math.random() * 9999999)).padStart(7, '0')}/${branchIndex + 1}` : undefined,
+        esicNumber: Math.random() > 0.5 ? `${String(Math.floor(Math.random() * 9999999)).padStart(7, '0')}/1` : undefined,
         bankAccount: `MORYA${String(Math.floor(Math.random() * 99999999999)).padStart(11, '0')}`,
         ifscCode: 'SBIN0XXXXXX',
         panNumber: Math.random() > 0.2 ? `${['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K'][Math.floor(Math.random() * 10)]}${String(Math.floor(Math.random() * 9999999)).padStart(7, '0')}${['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K'][Math.floor(Math.random() * 10)]}` : undefined,
@@ -727,116 +723,50 @@ class DataService {
     this.ensureData();
     const branch = this.getBranchById(employee.branchId);
     const settings = this.getSettings();
-    
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0);
-    const totalDays = monthEnd.getDate();
-    const workingDays = this.getWorkingDays(year, month - 1);
-    
-    const empAttendance = this.getAttendance(employee.id, month, year) as Record<string, AttendanceRecord>;
-    
-    let presentDays = 0, paidLeaveDays = 0, holidayDays = 0, weekOffDays = 0, absentDays = 0, lopDays = 0;
-    
-    for (let d = 1; d <= totalDays; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const record = empAttendance[dateStr];
-      
-      if (!record) {
-        absentDays++;
-      } else {
-        switch (record.status) {
-          case 'P': presentDays++; break;
-          case 'PL': paidLeaveDays++; break;
-          case 'H': holidayDays++; break;
-          case 'WO': weekOffDays++; break;
-          case 'A':
-          case 'LOP': absentDays++; lopDays++; break;
-        }
-      }
-    }
-
-    const basicSalary = Math.round(employee.salary * 0.5);
-    const hra = Math.round(employee.salary * 0.2);
-    const conveyance = Math.round(employee.salary * 0.1);
-    const otherAllowances = employee.salary - basicSalary - hra - conveyance;
-    const grossSalary = employee.salary;
-    
-    const perDaySalary = employee.salary / totalDays;
-    const lopDeduction = Math.round(lopDays * perDaySalary);
-    
-    const overtimeEntries = this.getOvertime(employee.id, month, year).filter(o => o.status === 'APPROVED');
-    let overtimeHours = 0;
-    let overtimeDays = 0;
-    let overtimeAmount = 0;
-    
-    overtimeEntries.forEach(ot => {
-      if (ot.type === 'HOURLY' && ot.hours) {
-        overtimeHours += ot.hours;
-        if (ot.amount) {
-          overtimeAmount += ot.amount;
-        } else {
-          const rate = ot.rate || settings.overtimeSettings.hourlyRate;
-          overtimeAmount += ot.hours * rate;
-        }
-      } else if (ot.type === 'FULL_DAY') {
-        overtimeDays++;
-        if (ot.amount) {
-          overtimeAmount += ot.amount;
-        } else {
-          const rate = ot.rate || settings.overtimeSettings.fullDayRate;
-          overtimeAmount += rate;
-        }
-      }
+    const attendanceRecords = this.getAttendance(employee.id, month, year) as Record<string, AttendanceRecord>;
+    const overtimeEntries = this.getOvertime(employee.id, month, year);
+    const calc = payrollCalc({
+      employee,
+      branch,
+      attendanceRecords,
+      overtimeEntries,
+      settings,
+      month,
+      year,
     });
 
-    let driverIncentive = 0;
-    if (employee.subDepotCategory === 'DRIVERS' && branch) {
-      driverIncentive = calculateTieredIncentive(branch, presentDays, 'DRIVERS');
-    }
-
-    const incentive = employee.subDepotCategory === 'DRIVERS'
-      ? 0
-      : (branch?.incentiveValue || 0);
-    const totalEarnings = grossSalary - lopDeduction + overtimeAmount + driverIncentive + incentive;
-    
-    const pfDeduction = employee.pfEnabled && employee.pfRegistrationStatus === 'COMPLETED' 
-      ? Math.round(basicSalary * (settings.pfRate / 100)) 
-      : 0;
-    const esicDeduction = employee.esicEnabled && employee.esicRegistrationStatus === 'COMPLETED' 
-      ? Math.round(totalEarnings * (settings.esicRate / 100)) 
-      : 0;
-    const tdsDeduction = employee.salary * 12 > settings.tdsThreshold 
-      ? Math.round(totalEarnings * (settings.tdsRate / 100)) 
-      : 0;
-    
-    const totalDeductions = pfDeduction + esicDeduction + tdsDeduction + lopDeduction;
-    const netSalary = Math.round(totalEarnings - totalDeductions);
-
     return {
-      basicSalary,
-      hra,
-      conveyance,
-      otherAllowances,
-      grossSalary,
-      presentDays,
-      paidLeaveDays,
-      holidayDays,
-      weekOffDays,
-      absentDays,
-      lopDays,
-      lopDeduction,
-      overtimeHours,
-      overtimeDays,
-      overtimeAmount,
-      driverIncentive,
-      incentive,
-      totalEarnings,
-      pfDeduction,
-      esicDeduction,
-      tdsDeduction,
+      basicSalary: calc.fullBasic,
+      hra: calc.fullHra,
+      conveyance: calc.fullConveyance,
+      otherAllowances: calc.fullAllowances,
+      grossSalary: calc.fullGross,
+      presentDays: calc.presentDays,
+      paidLeaveDays: calc.paidLeaveDays,
+      holidayDays: calc.holidayDays,
+      weekOffDays: calc.weekOffDays,
+      absentDays: calc.absentDays,
+      lopDays: calc.lopDays,
+      lopDeduction: calc.lopDeduction,
+      overtimeHours: calc.overtimeHours,
+      overtimeDays: calc.overtimeDays,
+      overtimeType: calc.overtimeHours > 0 ? 'HOURLY' : calc.overtimeDays > 0 ? 'FULL_DAY' : undefined,
+      overtimeAmount: calc.overtimeAmount,
+      driverIncentive: calc.driverIncentive,
+      incentive: calc.incentive,
+      totalEarnings: calc.totalEarnings,
+      pfDeduction: calc.pfDeduction,
+      esicDeduction: calc.esicDeduction,
+      tdsDeduction: calc.tdsDeduction,
+      ptDeduction: calc.ptDeduction,
       otherDeductions: 0,
-      totalDeductions,
-      netSalary
+      totalDeductions: calc.totalDeductions,
+      netSalary: calc.netSalary,
+      earnedBasic: calc.earnedBasic,
+      earnedHra: calc.earnedHra,
+      earnedConveyance: calc.earnedConveyance,
+      earnedAllowances: calc.earnedAllowances,
+      earnedGross: calc.earnedGross,
     };
   }
 
@@ -962,12 +892,12 @@ class DataService {
     this.users = this.generateDefaultUsers();
     this.settings = { ...DEFAULT_SETTINGS };
     this.cache();
+    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs', 'branches', 'employees', 'subdepots', 'hrms_users'].forEach(t => this.clearTable(t));
     this.persistRows('branches', this.branches, ['id']);
     this.persistRows('employees', this.employees, ['id']);
     this.persistRows('subdepots', this.subDepots, ['id']);
     this.persistRows('hrms_users', this.users, ['id']);
     this.persistRows('system_settings', [{ key: 'app', value: this.settings }], ['key']);
-    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs'].forEach(t => this.clearTable(t));
   }
 
   getAssignments(employeeId?: string): EmployeeAssignment[] {

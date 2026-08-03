@@ -28,6 +28,7 @@ export default function DashboardPage() {
     pendingLeaves: 0,
     departmentData: [] as { name: string; count: number }[],
     genderData: [] as { name: string; value: number; color: string }[],
+    busData: [] as { name: string; value: number; color: string }[],
     depotData: [] as { name: string; employees: number }[]
   });
   const [recentActivity, setRecentActivity] = useState<{ id: number; action: string; user: string; time: string; icon: typeof Bus; color: string }[]>([]);
@@ -55,6 +56,12 @@ export default function DashboardPage() {
       employees: employees.filter(e => e.branchId === branch.id && e.status === 'ACTIVE').length
     }));
 
+    const activeDrivers = activeEmployees.filter(e => e.subDepotCategory === 'DRIVERS');
+    const busData = [
+      { name: '8 Meter', value: activeDrivers.filter(e => e.busCategory === '8 METER').length, color: '#3b82f6' },
+      { name: '12 Meter', value: activeDrivers.filter(e => e.busCategory === '12 METER').length, color: '#f59e0b' }
+    ];
+
     setStats({
       totalEmployees: employees.length,
       activeEmployees: activeEmployees.length,
@@ -68,6 +75,7 @@ export default function DashboardPage() {
         { name: 'Female', value: femaleCount, color: '#ec4899' },
         { name: 'Other', value: otherCount, color: '#8b5cf6' }
       ],
+      busData,
       depotData
     });
 
@@ -185,21 +193,37 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {isAdmin && (
-          <div style={{ ...styles.chartCard, ...(isMobile ? { padding: '12px' } : {}) }}>
-            <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Top 10 Depots by Employees</h3>
-            <div style={styles.chartContainer}>
-              <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
-                <BarChart data={stats.depotData} layout={isMobile ? 'horizontal' : 'vertical'}>
-                  <XAxis dataKey={isMobile ? 'name' : undefined} type={isMobile ? 'category' : undefined} tick={{ fontSize: isMobile ? 10 : 12 }} />
-                  <YAxis dataKey={isMobile ? undefined : 'name'} type={isMobile ? undefined : 'category'} tick={{ fontSize: isMobile ? 10 : 12 }} width={isMobile ? undefined : 60} />
-                  <Tooltip />
-                  <Bar dataKey="employees" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+        <div style={{ ...styles.chartCard, ...(isMobile ? { padding: '12px' } : {}) }}>
+          <h3 style={{ ...styles.chartTitle, ...(isMobile ? { fontSize: '14px', marginBottom: '12px' } : {}) }}>Drivers by Bus Category</h3>
+          <div style={styles.chartContainer}>
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
+              <PieChart>
+                <Pie
+                  data={stats.busData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={isMobile ? 40 : 60}
+                  outerRadius={isMobile ? 70 : 100}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {stats.busData.map((entry, index) => (
+                    <Cell key={`bus-cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ ...styles.legendContainer, ...(isMobile ? { gap: '12px', marginTop: '8px' } : {}) }}>
+              {stats.busData.map((item, index) => (
+                <div key={index} style={styles.legendItem}>
+                  <span style={{ ...styles.legendDot, background: item.color }} />
+                  <span>{item.name}: {item.value}</span>
+                </div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <div style={{ ...styles.bottomGrid, ...(isMobile ? { gridTemplateColumns: '1fr', gap: '12px' } : {}) }}>

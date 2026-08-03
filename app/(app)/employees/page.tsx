@@ -8,7 +8,7 @@ import {
   Search, Filter, Plus, ChevronDown, ChevronUp, Edit2, Trash2, 
   Eye, Download, X, User, Mail, Phone, MapPin, Calendar,
   Briefcase, Building2, CreditCard, FileText, Award, AlertTriangle,
-  ArrowLeftRight, History, ShieldCheck
+  ArrowLeftRight, History, ShieldCheck, Bus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
@@ -24,6 +24,7 @@ export default function EmployeesPage() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedBusCategory, setSelectedBusCategory] = useState('');
   const [sortField, setSortField] = useState<keyof Employee>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -49,6 +50,7 @@ export default function EmployeesPage() {
     dateOfBirth: '',
     gender: 'MALE' as 'MALE' | 'FEMALE' | 'OTHER',
     department: 'Drivers',
+    busCategory: '' as '' | '8 METER' | '12 METER',
     designation: '',
     branchId: '',
     salary: 18000,
@@ -74,7 +76,7 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     filterAndSortEmployees();
-  }, [employees, searchTerm, selectedDept, selectedStatus, sortField, sortOrder, currentPage]);
+  }, [employees, searchTerm, selectedDept, selectedStatus, selectedBusCategory, sortField, sortOrder, currentPage]);
 
   const loadData = () => {
     const branchList = dataService.getBranches();
@@ -105,6 +107,10 @@ export default function EmployeesPage() {
 
     if (selectedStatus) {
       filtered = filtered.filter(emp => emp.status === selectedStatus);
+    }
+
+    if (selectedBusCategory) {
+      filtered = filtered.filter(emp => emp.busCategory === selectedBusCategory);
     }
 
     filtered.sort((a, b) => {
@@ -162,6 +168,7 @@ export default function EmployeesPage() {
       dateOfBirth: '',
       gender: 'MALE',
       department: 'Drivers',
+      busCategory: '',
       designation: '',
       branchId: branches[0]?.id || '',
       salary: 18000,
@@ -189,6 +196,7 @@ export default function EmployeesPage() {
       dateOfBirth: emp.dateOfBirth,
       gender: emp.gender,
       department: emp.department,
+      busCategory: emp.busCategory || '',
       designation: emp.designation,
       branchId: emp.branchId,
       salary: emp.salary,
@@ -235,6 +243,7 @@ export default function EmployeesPage() {
       designation: form.designation.trim() || form.department,
       branchId: form.branchId,
       subDepotCategory,
+      busCategory: (form.busCategory as '8 METER' | '12 METER') || editingEmployee?.busCategory,
       salary: form.salary,
       pfEnabled: editingEmployee?.pfEnabled ?? true,
       pfRegistrationStatus: editingEmployee?.pfRegistrationStatus ?? 'PENDING' as const,
@@ -483,6 +492,16 @@ export default function EmployeesPage() {
           <option value="TERMINATED">Terminated</option>
           <option value="TRANSFERRED">Transferred</option>
         </select>
+
+        <select
+          value={selectedBusCategory}
+          onChange={(e) => setSelectedBusCategory(e.target.value)}
+          style={styles.select}
+        >
+          <option value="">All Bus Categories</option>
+          <option value="8 METER">8 Meter Bus</option>
+          <option value="12 METER">12 Meter Bus</option>
+        </select>
       </div>
 
       <div style={styles.tableContainer}>
@@ -510,6 +529,11 @@ export default function EmployeesPage() {
                 </button>
               </th>
               <th style={styles.th}>Branch</th>
+              <th style={styles.th}>
+                <button onClick={() => handleSort('busCategory')} style={styles.sortButton}>
+                  Bus Category <SortIcon field="busCategory" />
+                </button>
+              </th>
               <th style={styles.th}>
                 <button onClick={() => handleSort('salary')} style={styles.sortButton}>
                   Salary <SortIcon field="salary" />
@@ -540,6 +564,19 @@ export default function EmployeesPage() {
                 <td style={styles.td}>{emp.designation}</td>
                 <td style={styles.td}>
                   {branches.find(b => b.id === emp.branchId)?.code || '-'}
+                </td>
+                <td style={styles.td}>
+                  {emp.busCategory ? (
+                    <span style={{
+                      ...styles.statusBadge,
+                      background: emp.busCategory === '8 METER' ? '#dbeafe' : '#fef3c7',
+                      color: emp.busCategory === '8 METER' ? '#1e40af' : '#92400e'
+                    }}>
+                      {emp.busCategory === '8 METER' ? '8M Bus' : '12M Bus'}
+                    </span>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>-</span>
+                  )}
                 </td>
                 <td style={styles.td}>
                   ₹{emp.salary.toLocaleString()}
@@ -670,6 +707,15 @@ export default function EmployeesPage() {
                     <p>{selectedEmployee.department} · {selectedEmployee.designation}</p>
                   </div>
                 </div>
+                {selectedEmployee.busCategory && (
+                  <div style={styles.detailRow}>
+                    <Bus size={18} color="#f59e0b" />
+                    <div>
+                      <label>Bus Category</label>
+                      <p>{selectedEmployee.busCategory === '8 METER' ? '8 Meter Bus' : '12 Meter Bus'}</p>
+                    </div>
+                  </div>
+                )}
                 <div style={styles.detailRow}>
                   <Building2 size={18} color="#64748b" />
                   <div>
@@ -1156,9 +1202,19 @@ export default function EmployeesPage() {
               )}
 
               {form.department === 'Drivers' && (
-                <div style={{ marginTop: '14px', padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '12px', color: '#1e40af' }}>
-                  Driver incentive will be applied automatically at payroll based on this depot's attendance tiers (24/26 days structure).
-                </div>
+                <>
+                  <div style={{ marginTop: '14px' }}>
+                    <label style={styles.fieldLabel}>BUS CATEGORY</label>
+                    <select style={styles.fieldInput} value={form.busCategory} onChange={e => setForm({ ...form, busCategory: e.target.value as '' | '8 METER' | '12 METER' })}>
+                      <option value="">-- Select Bus Category --</option>
+                      <option value="8 METER">8 Meter Bus</option>
+                      <option value="12 METER">12 Meter Bus</option>
+                    </select>
+                  </div>
+                  <div style={{ marginTop: '14px', padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '12px', color: '#1e40af' }}>
+                    Driver incentive will be applied automatically at payroll based on this depot's attendance tiers (24/26 days structure).
+                  </div>
+                </>
               )}
             </div>
             <div style={styles.modalFooter}>

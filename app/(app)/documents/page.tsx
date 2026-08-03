@@ -2,7 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import { useStore } from '../../lib/context/StoreContext';
-import { calculatePayroll } from '../../lib/utils/payrollEngine';
+import { calculatePayroll as calcPayroll } from '../../lib/utils/payrollCalc';
+import { dataService } from '../../lib/services/dataService';
 import { 
   FileText, 
   Download, 
@@ -28,7 +29,15 @@ export default function DocumentsPage() {
 
   const selectedEmployee = employees.find(e => e.id === selectedEmpId);
   const branch = branches.find(b => b.id === selectedEmployee?.branchId);
-  const payroll = selectedEmployee && branch ? calculatePayroll(selectedEmployee, branch, attendance, selectedMonth, selectedYear) : null;
+  const payroll = selectedEmployee && branch ? calcPayroll({
+    employee: selectedEmployee,
+    branch,
+    attendanceRecords: (attendance[selectedEmployee.id] || {}) as Record<string, any>,
+    overtimeEntries: [],
+    settings: dataService.getSettings(),
+    month: selectedMonth + 1,
+    year: selectedYear,
+  }) : null;
 
   const downloadPDF = async () => {
     if (!docRef.current) return;
@@ -175,7 +184,7 @@ export default function DocumentsPage() {
                           </div>
                        </div>
 
-                       <table style={{ border: '1px solid #0f172a', marginBottom: '2rem' }}>
+                       <table style={{ border: '1px solid #0f172a', marginBottom: '1.5rem' }}>
                           <thead style={{ background: '#f8fafc' }}>
                              <tr>
                                 <th style={{ color: '#0f172a' }}>Earnings</th>
@@ -187,37 +196,70 @@ export default function DocumentsPage() {
                           <tbody>
                              <tr>
                                 <td>Basic Salary</td>
-                                <td>₹{payroll.baseSalary.toLocaleString()}</td>
+                                <td>₹{payroll.earnedBasic.toLocaleString()}</td>
                                 <td>Provident Fund (PF)</td>
-                                <td>₹{payroll.pf.toLocaleString()}</td>
-                             </tr>
-                              <tr>
-                                <td>Incentive (Attendance/Depot)</td>
-                                <td>₹{payroll.incentive.toLocaleString()}</td>
-                                <td>Provident Fund (PF)</td>
-                                <td>₹{payroll.pf.toLocaleString()}</td>
+                                <td>₹{payroll.pfDeduction.toLocaleString()}</td>
                              </tr>
                              <tr>
-                                <td></td>
-                                <td></td>
+                                <td>HRA</td>
+                                <td>₹{payroll.earnedHra.toLocaleString()}</td>
+                                <td>ESIC</td>
+                                <td>₹{payroll.esicDeduction.toLocaleString()}</td>
+                             </tr>
+                             <tr>
+                                <td>Conveyance</td>
+                                <td>₹{payroll.earnedConveyance.toLocaleString()}</td>
+                                <td>TDS</td>
+                                <td>₹{payroll.tdsDeduction.toLocaleString()}</td>
+                             </tr>
+                             <tr>
+                                <td>Other Allowances</td>
+                                <td>₹{payroll.earnedAllowances.toLocaleString()}</td>
+                                <td>Professional Tax (PT)</td>
+                                <td>₹{payroll.ptDeduction.toLocaleString()}</td>
+                             </tr>
+                             <tr>
+                                <td>Overtime ({payroll.overtimeHours}h / {payroll.overtimeDays}d)</td>
+                                <td>₹{payroll.overtimeAmount.toLocaleString()}</td>
                                 <td>Loss of Pay (LOP)</td>
-                                <td>₹{Math.round(payroll.lopDeduction).toLocaleString()}</td>
+                                <td>₹{payroll.lopDeduction.toLocaleString()}</td>
+                             </tr>
+                             <tr>
+                                <td>Incentive</td>
+                                <td>₹{payroll.incentive.toLocaleString()}</td>
+                                <td>Driver Incentive</td>
+                                <td>₹{payroll.driverIncentive.toLocaleString()}</td>
                              </tr>
                              <tr style={{ fontWeight: 700, borderTop: '2px solid #0f172a' }}>
                                 <td><strong>GROSS EARNINGS</strong></td>
-                                <td><strong>₹{payroll.gross.toLocaleString()}</strong></td>
+                                <td><strong>₹{payroll.totalEarnings.toLocaleString()}</strong></td>
                                 <td><strong>TOTAL DEDUCTIONS</strong></td>
-                                <td><strong>₹{Math.round(payroll.deductions).toLocaleString()}</strong></td>
+                                <td><strong>₹{payroll.totalDeductions.toLocaleString()}</strong></td>
                              </tr>
                           </tbody>
                        </table>
+
+                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.8rem', textAlign: 'center' }}>
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
+                             <p style={{ fontWeight: 700 }}>Present Days</p>
+                             <p>{payroll.presentDays} / {payroll.daysInMonth}</p>
+                          </div>
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
+                             <p style={{ fontWeight: 700 }}>Absent / LOP</p>
+                             <p>{payroll.absentDays} / {payroll.lopDays}</p>
+                          </div>
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
+                             <p style={{ fontWeight: 700 }}>Paid / Holiday / Week Off</p>
+                             <p>{payroll.paidLeaveDays} / {payroll.holidayDays} / {payroll.weekOffDays}</p>
+                          </div>
+                       </div>
 
                        <div style={{ background: '#ecfdf5', borderLeft: '5px solid #10b981', padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                              <h3 style={{ color: '#065f46', fontSize: '1rem' }}>NET SALARY PAYABLE</h3>
                              <p style={{ fontSize: '0.75rem', color: '#065f46' }}>Disbursed via Direct Bank Transfer</p>
                           </div>
-                          <h2 style={{ color: '#065f46', fontSize: '2.25rem' }}>₹{Math.round(payroll.net).toLocaleString()}</h2>
+                          <h2 style={{ color: '#065f46', fontSize: '2.25rem' }}>₹{payroll.netSalary.toLocaleString()}</h2>
                        </div>
                     </div>
                   ) : (

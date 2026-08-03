@@ -13,6 +13,7 @@ export interface User {
 }
 
 export type SubDepotCategory = 'STAFF' | 'DRIVERS';
+export type BusCategory = '8 METER' | '12 METER';
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED' | 'TRANSFERRED';
 export type PfRegistrationStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
@@ -49,6 +50,7 @@ export interface Employee {
   designation: string;
   branchId: string;
   subDepotCategory: SubDepotCategory;
+  busCategory?: BusCategory;
   salary: number;
   pfEnabled: boolean;
   pfRegistrationStatus: PfRegistrationStatus;
@@ -194,6 +196,7 @@ export interface PayrollEntry {
   pfDeduction: number;
   esicDeduction: number;
   tdsDeduction: number;
+  ptDeduction: number;
   otherDeductions: number;
   totalDeductions: number;
   netSalary: number;
