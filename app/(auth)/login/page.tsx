@@ -71,11 +71,11 @@ export default function LoginPage() {
           <h1 style={s.brandTitle}>HRMS Pro</h1>
           <p style={s.brandSub}>Morya Bus Services</p>
           <p style={s.desc}>
-            Complete HR & Payroll Management System for 30 Depots
+            Complete HR & Payroll Management System for Multi-Depot Operations
           </p>
           <div style={s.features}>
-            <div style={s.feature}><Shield size={16} color="#10b981" /><span>2000+ Employees</span></div>
-            <div style={s.feature}><Bus size={16} color="#10b981" /><span>30 Depots</span></div>
+            <div style={s.feature}><Shield size={16} color="#10b981" /><span>40+ Employees</span></div>
+            <div style={s.feature}><Bus size={16} color="#10b981" /><span>2 Depots</span></div>
           </div>
         </div>
       </div>

@@ -3,9 +3,10 @@
 import { 
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
-  IncentiveTier
+  IncentiveTier, User
 } from '../types';
 import { calculateTieredIncentive, normalizeAadhaar } from '../utils/incentive';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const BRANCHES_KEY = 'hrms_branches';
 const EMPLOYEES_KEY = 'hrms_employees';
@@ -17,9 +18,29 @@ const SETTINGS_KEY = 'hrms_settings';
 const OVERTIME_KEY = 'hrms_overtime';
 const SUB_DEPOTS_KEY = 'hrms_subdepots';
 const ASSIGNMENTS_KEY = 'hrms_assignments';
+const USERS_KEY = 'hrms_users';
+
+const DEFAULT_SETTINGS: SystemSettings = {
+  pfRate: 12,
+  esicRate: 0.75,
+  tdsThreshold: 300000,
+  tdsRate: 5,
+  maxLopDays: 0,
+  processingMonth: 'Jan',
+  processingYear: 2026,
+  overtimeSettings: {
+    hourlyRate: 50,
+    fullDayRate: 300,
+    maxHourlyOvertime: 4,
+    maxFullDayOvertime: 10
+  },
+  driverMonthlyIncentive: 2000,
+  attendanceCycle: 'CALENDAR'
+};
 
 class DataService {
   private isInitialized = false;
+  private supabaseStarted = false;
   private branches: Branch[] = [];
   private employees: Employee[] = [];
   private attendance: Attendance = {};
@@ -29,123 +50,212 @@ class DataService {
   private overtimeEntries: OvertimeEntry[] = [];
   private subDepots: SubDepot[] = [];
   private assignments: EmployeeAssignment[] = [];
-  private settings: SystemSettings = {
-    pfRate: 12,
-    esicRate: 0.75,
-    tdsThreshold: 300000,
-    tdsRate: 5,
-    maxLopDays: 0,
-    processingMonth: 'Jan',
-    processingYear: 2026,
-    overtimeSettings: {
-      hourlyRate: 50,
-      fullDayRate: 300,
-      maxHourlyOvertime: 4,
-      maxFullDayOvertime: 10
-    },
-    driverMonthlyIncentive: 2000,
-    attendanceCycle: 'CALENDAR'
-  };
+  private users: User[] = [];
+  private settings: SystemSettings = { ...DEFAULT_SETTINGS };
+
+  async initialize(): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      this.loadFromLocalCache();
+      this.isInitialized = true;
+      return true;
+    }
+    if (this.supabaseStarted) return true;
+    this.supabaseStarted = true;
+    try {
+      await this.loadAllFromSupabase();
+      this.isInitialized = true;
+      return true;
+    } catch (e) {
+      console.error('Supabase initialization failed, using local cache', e);
+      this.loadFromLocalCache();
+      this.isInitialized = true;
+      return false;
+    }
+  }
 
   private ensureData() {
     if (this.isInitialized) return;
     if (typeof window === 'undefined') return;
-    
-    const branches = localStorage.getItem(BRANCHES_KEY);
-    const employees = localStorage.getItem(EMPLOYEES_KEY);
-    const attendance = localStorage.getItem(ATTENDANCE_KEY);
-    const payroll = localStorage.getItem(PAYROLL_KEY);
-    const leaves = localStorage.getItem(LEAVES_KEY);
-    const audit = localStorage.getItem(AUDIT_KEY);
-    const settings = localStorage.getItem(SETTINGS_KEY);
-    const overtime = localStorage.getItem(OVERTIME_KEY);
-    const subDepots = localStorage.getItem(SUB_DEPOTS_KEY);
-    const assignments = localStorage.getItem(ASSIGNMENTS_KEY);
-
-    this.branches = branches ? JSON.parse(branches) : this.generateBranches();
-    this.employees = employees ? JSON.parse(employees) : this.generateEmployees();
-    this.attendance = attendance ? JSON.parse(attendance) : {};
-    this.payroll = payroll ? JSON.parse(payroll) : [];
-    this.leaves = leaves ? JSON.parse(leaves) : [];
-    this.auditLogs = audit ? JSON.parse(audit) : [];
-    this.overtimeEntries = overtime ? JSON.parse(overtime) : [];
-    this.subDepots = subDepots ? JSON.parse(subDepots) : this.generateSubDepots();
-    this.assignments = assignments ? JSON.parse(assignments) : [];
-    this.settings = settings ? JSON.parse(settings) : this.settings;
-
-    let branchesChanged = false;
-    this.branches = this.branches.map(b => {
-      if (!b.incentiveTiers || b.incentiveTiers.length === 0) {
-        branchesChanged = true;
-        return {
-          ...b,
-          incentiveTiers: [
-            { id: 'tier-1', minDays: 24, maxDays: 25, amount: 2000 },
-            { id: 'tier-2', minDays: 26, maxDays: 30, amount: 3000 }
-          ]
-        };
-      }
-      return b;
-    });
-    if (branchesChanged) localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
-
-    if (!branches) localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
-    if (!employees) localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
-    if (!settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
-    if (!subDepots) localStorage.setItem(SUB_DEPOTS_KEY, JSON.stringify(this.subDepots));
-    
+    this.loadFromLocalCache();
     this.isInitialized = true;
+    if (isSupabaseConfigured() && !this.supabaseStarted) {
+      this.supabaseStarted = true;
+      this.initialize();
+    }
+  }
+
+  private loadFromLocalCache() {
+    if (typeof window === 'undefined') return;
+    try {
+      const branches = localStorage.getItem(BRANCHES_KEY);
+      const employees = localStorage.getItem(EMPLOYEES_KEY);
+      const attendance = localStorage.getItem(ATTENDANCE_KEY);
+      const payroll = localStorage.getItem(PAYROLL_KEY);
+      const leaves = localStorage.getItem(LEAVES_KEY);
+      const audit = localStorage.getItem(AUDIT_KEY);
+      const settings = localStorage.getItem(SETTINGS_KEY);
+      const overtime = localStorage.getItem(OVERTIME_KEY);
+      const subDepots = localStorage.getItem(SUB_DEPOTS_KEY);
+      const assignments = localStorage.getItem(ASSIGNMENTS_KEY);
+      const users = localStorage.getItem(USERS_KEY);
+
+      this.branches = branches ? JSON.parse(branches) : this.generateBranches();
+      this.employees = employees ? JSON.parse(employees) : this.generateEmployees();
+      this.attendance = attendance ? JSON.parse(attendance) : {};
+      this.payroll = payroll ? JSON.parse(payroll) : [];
+      this.leaves = leaves ? JSON.parse(leaves) : [];
+      this.auditLogs = audit ? JSON.parse(audit) : [];
+      this.overtimeEntries = overtime ? JSON.parse(overtime) : [];
+      this.subDepots = subDepots ? JSON.parse(subDepots) : this.generateSubDepots();
+      this.assignments = assignments ? JSON.parse(assignments) : [];
+      this.users = users ? JSON.parse(users) : this.generateDefaultUsers();
+      this.settings = settings ? { ...DEFAULT_SETTINGS, ...JSON.parse(settings) } : { ...DEFAULT_SETTINGS };
+    } catch (e) {
+      console.error('Failed to load local cache', e);
+    }
+  }
+
+  private async loadAllFromSupabase() {
+    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users'];
+    const results = await Promise.all(
+      tableNames.map(t => supabase.from(t).select('*').limit(100000))
+    );
+
+    const data: Record<string, any[]> = {};
+    tableNames.forEach((t, i) => {
+      if (results[i].error) throw results[i].error;
+      data[t] = results[i].data || [];
+    });
+
+    this.branches = data.branches;
+    this.employees = data.employees;
+    this.payroll = data.payroll;
+    this.leaves = data.leaves;
+    this.auditLogs = data.audit_logs;
+    this.overtimeEntries = data.overtime;
+    this.subDepots = data.subdepots;
+    this.assignments = data.assignments;
+    this.users = data.hrms_users;
+
+    const attendanceMap: Attendance = {};
+    data.attendance.forEach((row: any) => {
+      if (!attendanceMap[row.employeeId]) attendanceMap[row.employeeId] = {};
+      const { employeeId, date, ...rest } = row;
+      attendanceMap[employeeId][date] = { employeeId, date, ...rest } as AttendanceRecord;
+    });
+    this.attendance = attendanceMap;
+
+    const settingsRows = data.system_settings || [];
+    const appSettings = (await this.fetchSettings()) || null;
+    this.settings = appSettings ? { ...DEFAULT_SETTINGS, ...appSettings } : { ...DEFAULT_SETTINGS };
+
+    let seeded = false;
+    if (this.branches.length === 0) { this.branches = this.generateBranches(); seeded = true; }
+    if (this.employees.length === 0) { this.employees = this.generateEmployees(); seeded = true; }
+    if (this.subDepots.length === 0) { this.subDepots = this.generateSubDepots(); seeded = true; }
+    if (this.users.length === 0) { this.users = this.generateDefaultUsers(); seeded = true; }
+
+    if (seeded) {
+      await Promise.all([
+        this.persistRows('branches', this.branches, ['id']),
+        this.persistRows('employees', this.employees, ['id']),
+        this.persistRows('subdepots', this.subDepots, ['id']),
+        this.persistRows('hrms_users', this.users, ['id'])
+      ]);
+    }
+
+    this.cache();
+  }
+
+  private async fetchSettings(): Promise<Partial<SystemSettings> | null> {
+    if (!isSupabaseConfigured()) return null;
+    const { data, error } = await supabase.from('system_settings').select('*').eq('key', 'app').limit(1);
+    if (error) throw error;
+    return data?.[0]?.value || null;
+  }
+
+  private cache() {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
+      localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
+      localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(this.attendance));
+      localStorage.setItem(PAYROLL_KEY, JSON.stringify(this.payroll));
+      localStorage.setItem(LEAVES_KEY, JSON.stringify(this.leaves));
+      localStorage.setItem(AUDIT_KEY, JSON.stringify(this.auditLogs));
+      localStorage.setItem(OVERTIME_KEY, JSON.stringify(this.overtimeEntries));
+      localStorage.setItem(SUB_DEPOTS_KEY, JSON.stringify(this.subDepots));
+      localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+      localStorage.setItem(USERS_KEY, JSON.stringify(this.users));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+    } catch (e) {
+      console.error('Failed to write local cache', e);
+    }
+  }
+
+  private async persistRows(table: string, rows: any[], conflictColumns?: string[]) {
+    if (!isSupabaseConfigured() || rows.length === 0) return;
+    try {
+      const onConflict = conflictColumns && conflictColumns.length > 0 ? conflictColumns.join(',') : 'id';
+      const { error } = await supabase.from(table).upsert(rows, { onConflict });
+      if (error) throw error;
+    } catch (e) {
+      console.error(`Supabase upsert ${table} failed`, e);
+    }
+  }
+
+  private async deleteRows(table: string, column: string, values: any[]) {
+    if (!isSupabaseConfigured() || values.length === 0) return;
+    try {
+      const { error } = await supabase.from(table).delete().in(column, values);
+      if (error) throw error;
+    } catch (e) {
+      console.error(`Supabase delete ${table} failed`, e);
+    }
+  }
+
+  private async clearTable(table: string) {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const filterCol = table === 'attendance' ? 'employeeId' : 'id';
+      const { error } = await supabase.from(table).delete().not(filterCol, 'is', null);
+      if (error) throw error;
+    } catch (e) {
+      console.error(`Supabase clear ${table} failed`, e);
+    }
+  }
+
+  private generateDefaultUsers(): User[] {
+    const users: User[] = [
+      {
+        id: 'admin-001',
+        email: 'admin@moryabuses.com',
+        password: 'admin123',
+        name: 'System Administrator',
+        role: 'ADMIN',
+        createdAt: new Date().toISOString(),
+        isActive: true
+      }
+    ];
+    for (let i = 0; i < 2; i++) {
+      users.push({
+        id: `hr-${String(i + 1).padStart(3, '0')}`,
+        email: `hr.d${String(i + 1).padStart(3, '0')}@moryabuses.com`,
+        password: `hr${String(i + 1).padStart(3, '0')}`,
+        name: `HR Manager - Depot ${i + 1}`,
+        role: 'HR',
+        depotId: `depot-${String(i + 1).padStart(3, '0')}`,
+        createdAt: new Date().toISOString(),
+        isActive: true
+      });
+    }
+    return users;
   }
 
   private generateBranches(): Branch[] {
     const cities = [
       { city: 'Mumbai', state: 'Maharashtra' },
-      { city: 'Pune', state: 'Maharashtra' },
-      { city: 'Nagpur', state: 'Maharashtra' },
-      { city: 'Nashik', state: 'Maharashtra' },
-      { city: 'Aurangabad', state: 'Maharashtra' },
-      { city: 'Solapur', state: 'Maharashtra' },
-      { city: 'Kolhapur', state: 'Maharashtra' },
-      { city: 'Thane', state: 'Maharashtra' },
-      { city: 'Panvel', state: 'Maharashtra' },
-      { city: 'Ahmednagar', state: 'Maharashtra' },
-      { city: 'Jalgaon', state: 'Maharashtra' },
-      { city: 'Latur', state: 'Maharashtra' },
-      { city: 'Navi Mumbai', state: 'Maharashtra' },
-      { city: 'Satara', state: 'Maharashtra' },
-      { city: 'Sangli', state: 'Maharashtra' },
-      { city: 'Akola', state: 'Maharashtra' },
-      { city: 'Amravati', state: 'Maharashtra' },
-      { city: 'Dhule', state: 'Maharashtra' },
-      { city: 'Chandrapur', state: 'Maharashtra' },
-      { city: 'Parbhani', state: 'Maharashtra' },
-      { city: 'Ratnagiri', state: 'Maharashtra' },
-      { city: 'Panaji', state: 'Goa' },
-      { city: 'Surat', state: 'Gujarat' },
-      { city: 'Vadodara', state: 'Gujarat' },
-      { city: 'Ahmedabad', state: 'Gujarat' },
-      { city: 'Rajkot', state: 'Gujarat' },
-      { city: 'Indore', state: 'Madhya Pradesh' },
-      { city: 'Bhopal', state: 'Madhya Pradesh' },
-      { city: 'Hyderabad', state: 'Telangana' },
-      { city: 'Bangalore', state: 'Karnataka' },
-      { city: 'Chennai', state: 'Tamil Nadu' },
-      { city: 'Delhi', state: 'Delhi' },
-      { city: 'Jaipur', state: 'Rajasthan' },
-      { city: 'Lucknow', state: 'Uttar Pradesh' },
-      { city: 'Patna', state: 'Bihar' },
-      { city: 'Kolkata', state: 'West Bengal' },
-      { city: 'Guwahati', state: 'Assam' },
-      { city: 'Pune', state: 'Maharashtra' },
-      { city: 'Mumbai', state: 'Maharashtra' },
-      { city: 'Nagpur', state: 'Maharashtra' },
-      { city: 'Nashik', state: 'Maharashtra' },
-      { city: 'Aurangabad', state: 'Maharashtra' },
-      { city: 'Solapur', state: 'Maharashtra' },
-      { city: 'Kolhapur', state: 'Maharashtra' },
-      { city: 'Thane', state: 'Maharashtra' },
-      { city: 'Panvel', state: 'Maharashtra' },
-      { city: 'Ahmednagar', state: 'Maharashtra' }
+      { city: 'Pune', state: 'Maharashtra' }
     ];
 
     return cities.map((loc, i) => ({
@@ -214,12 +324,12 @@ class DataService {
 
     const employees: Employee[] = [];
 
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < 40; i++) {
       const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
       const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
       const dept = departments[Math.floor(Math.random() * departments.length)];
       const desig = designations[Math.floor(Math.random() * designations.length)];
-      const branchIndex = Math.floor(Math.random() * 50);
+      const branchIndex = Math.floor(Math.random() * 2);
       const baseSalary = dept === 'Drivers' ? 18000 + Math.random() * 8000 : 
                         dept === 'Operations' ? 20000 + Math.random() * 15000 :
                         15000 + Math.random() * 25000;
@@ -256,7 +366,7 @@ class DataService {
         bankAccount: `MORYA${String(Math.floor(Math.random() * 99999999999)).padStart(11, '0')}`,
         ifscCode: 'SBIN0XXXXXX',
         panNumber: Math.random() > 0.2 ? `${['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K'][Math.floor(Math.random() * 10)]}${String(Math.floor(Math.random() * 9999999)).padStart(7, '0')}${['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K'][Math.floor(Math.random() * 10)]}` : undefined,
-        aadharNumber: Math.random() > 0.1 ? `${String(Math.floor(Math.random() * 9999)).padStart(4, '0')} ${String(Math.floor(Math.random() * 9999)).padStart(4, '0')} ${String(Math.floor(Math.random() * 9999)).padStart(4, '0')} ${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}` : undefined,
+        aadharNumber: Math.random() > 0.1 ? `${String(Math.floor(Math.random() * 9999)).padStart(4, '0')} ${String(Math.floor(Math.random() * 9999)).padStart(4, '0')} ${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}` : undefined,
         joiningDate: `${joiningYear}-${String(joiningMonth).padStart(2, '0')}-${String(joiningDay).padStart(2, '0')}`,
         status: Math.random() > 0.1 ? 'ACTIVE' : Math.random() > 0.5 ? 'INACTIVE' : 'TERMINATED',
         address: `${Math.floor(Math.random() * 999) + 1}, Main Road, ${cities[Math.floor(Math.random() * cities.length)]}`,
@@ -275,7 +385,7 @@ class DataService {
 
   logAudit(userId: string, action: string, module: string, recordId?: string, oldValue?: any, newValue?: any) {
     this.ensureData();
-    this.auditLogs.push({
+    const entry: AuditLog = {
       id: `audit-${Date.now()}`,
       userId,
       action,
@@ -284,8 +394,12 @@ class DataService {
       oldValue: oldValue ? JSON.stringify(oldValue) : undefined,
       newValue: newValue ? JSON.stringify(newValue) : undefined,
       timestamp: new Date().toISOString()
-    });
-    localStorage.setItem(AUDIT_KEY, JSON.stringify(this.auditLogs));
+    };
+    this.auditLogs.push(entry);
+    this.cache();
+    if (isSupabaseConfigured()) {
+      supabase.from('audit_logs').insert(entry).then(r => { if (r.error) console.error('audit insert failed', r.error); });
+    }
   }
 
   getBranches(): Branch[] {
@@ -327,8 +441,9 @@ class DataService {
       createdAt: new Date().toISOString()
     });
     
-    localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
-    localStorage.setItem(SUB_DEPOTS_KEY, JSON.stringify(this.subDepots));
+    this.cache();
+    this.persistRows('branches', [newBranch], ['id']);
+    this.persistRows('subdepots', this.subDepots.filter(s => s.depotId === newBranch.id), ['id']);
     return newBranch;
   }
 
@@ -337,7 +452,8 @@ class DataService {
     const index = this.branches.findIndex(b => b.id === id);
     if (index === -1) return null;
     this.branches[index] = { ...this.branches[index], ...updates };
-    localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
+    this.cache();
+    this.persistRows('branches', [this.branches[index]], ['id']);
     return this.branches[index];
   }
 
@@ -458,7 +574,8 @@ class DataService {
       updatedAt: new Date().toISOString()
     };
     this.employees.push(newEmployee);
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
+    this.cache();
+    this.persistRows('employees', [newEmployee], ['id']);
     return newEmployee;
   }
 
@@ -471,7 +588,8 @@ class DataService {
       ...updates,
       updatedAt: new Date().toISOString()
     };
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
+    this.cache();
+    this.persistRows('employees', [this.employees[index]], ['id']);
     return this.employees[index];
   }
 
@@ -498,7 +616,8 @@ class DataService {
       updatedAt: new Date().toISOString()
     };
     
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
+    this.cache();
+    this.persistRows('employees', [this.employees[index]], ['id']);
     
     if (userId) {
       this.logAudit(userId, 'EMPLOYEE_TRANSFERRED', 'employees', employeeId,
@@ -513,7 +632,8 @@ class DataService {
     const index = this.employees.findIndex(e => e.id === id);
     if (index === -1) return false;
     this.employees.splice(index, 1);
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
+    this.cache();
+    this.deleteRows('employees', 'id', [id]);
     return true;
   }
 
@@ -542,7 +662,8 @@ class DataService {
       this.attendance[employeeId] = {};
     }
     this.attendance[employeeId][date] = record;
-    localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(this.attendance));
+    this.cache();
+    this.persistRows('attendance', [{ ...record, employeeId, date }], ['employeeId', 'date']);
   }
 
   bulkSetAttendance(records: AttendanceRecord[]) {
@@ -553,7 +674,12 @@ class DataService {
       }
       this.attendance[r.employeeId][r.date] = r;
     });
-    localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(this.attendance));
+    this.cache();
+    const rows = records.map(r => ({ ...r, employeeId: r.employeeId, date: r.date }));
+    const chunkSize = 500;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      this.persistRows('attendance', rows.slice(i, i + chunkSize), ['employeeId', 'date']);
+    }
   }
 
   getOvertime(employeeId?: string, month?: number, year?: number): OvertimeEntry[] {
@@ -577,7 +703,8 @@ class DataService {
       createdAt: new Date().toISOString()
     };
     this.overtimeEntries.push(newEntry);
-    localStorage.setItem(OVERTIME_KEY, JSON.stringify(this.overtimeEntries));
+    this.cache();
+    this.persistRows('overtime', [newEntry], ['id']);
     return newEntry;
   }
 
@@ -591,7 +718,8 @@ class DataService {
         approvedBy,
         approvedAt: new Date().toISOString()
       };
-      localStorage.setItem(OVERTIME_KEY, JSON.stringify(this.overtimeEntries));
+      this.cache();
+      this.persistRows('overtime', [this.overtimeEntries[index]], ['id']);
     }
   }
 
@@ -745,7 +873,8 @@ class DataService {
       id: `pay-${Date.now()}`
     };
     this.payroll.push(newEntry);
-    localStorage.setItem(PAYROLL_KEY, JSON.stringify(this.payroll));
+    this.cache();
+    this.persistRows('payroll', [newEntry], ['id']);
     return newEntry;
   }
 
@@ -754,7 +883,8 @@ class DataService {
     const index = this.payroll.findIndex(p => p.id === id);
     if (index === -1) return null;
     this.payroll[index] = { ...this.payroll[index], ...updates };
-    localStorage.setItem(PAYROLL_KEY, JSON.stringify(this.payroll));
+    this.cache();
+    this.persistRows('payroll', [this.payroll[index]], ['id']);
     return this.payroll[index];
   }
 
@@ -773,7 +903,8 @@ class DataService {
       id: `leave-${Date.now()}`
     };
     this.leaves.push(newRequest);
-    localStorage.setItem(LEAVES_KEY, JSON.stringify(this.leaves));
+    this.cache();
+    this.persistRows('leaves', [newRequest], ['id']);
     return newRequest;
   }
 
@@ -782,7 +913,8 @@ class DataService {
     const index = this.leaves.findIndex(l => l.id === id);
     if (index === -1) return null;
     this.leaves[index] = { ...this.leaves[index], ...updates };
-    localStorage.setItem(LEAVES_KEY, JSON.stringify(this.leaves));
+    this.cache();
+    this.persistRows('leaves', [this.leaves[index]], ['id']);
     return this.leaves[index];
   }
 
@@ -812,42 +944,30 @@ class DataService {
   updateSettings(updates: Partial<SystemSettings>): SystemSettings {
     this.ensureData();
     this.settings = { ...this.settings, ...updates };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+    this.cache();
+    this.persistRows('system_settings', [{ key: 'app', value: this.settings }], ['key']);
     return this.settings;
   }
 
   resetAllData() {
-    localStorage.removeItem(BRANCHES_KEY);
-    localStorage.removeItem(EMPLOYEES_KEY);
-    localStorage.removeItem(ATTENDANCE_KEY);
-    localStorage.removeItem(PAYROLL_KEY);
-    localStorage.removeItem(LEAVES_KEY);
-    localStorage.removeItem(AUDIT_KEY);
-    localStorage.removeItem(OVERTIME_KEY);
-    localStorage.removeItem(SUB_DEPOTS_KEY);
-    localStorage.removeItem(ASSIGNMENTS_KEY);
-    this.branches = this.generateBranches();
     this.employees = this.generateEmployees();
+    this.branches = this.generateBranches();
+    this.subDepots = this.generateSubDepots();
     this.attendance = {};
     this.payroll = [];
     this.leaves = [];
     this.auditLogs = [];
     this.overtimeEntries = [];
-    this.subDepots = this.generateSubDepots();
     this.assignments = [];
-    this.saveAll();
-  }
-
-  private saveAll() {
-    localStorage.setItem(BRANCHES_KEY, JSON.stringify(this.branches));
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(this.employees));
-    localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(this.attendance));
-    localStorage.setItem(PAYROLL_KEY, JSON.stringify(this.payroll));
-    localStorage.setItem(LEAVES_KEY, JSON.stringify(this.leaves));
-    localStorage.setItem(AUDIT_KEY, JSON.stringify(this.auditLogs));
-    localStorage.setItem(OVERTIME_KEY, JSON.stringify(this.overtimeEntries));
-    localStorage.setItem(SUB_DEPOTS_KEY, JSON.stringify(this.subDepots));
-    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+    this.users = this.generateDefaultUsers();
+    this.settings = { ...DEFAULT_SETTINGS };
+    this.cache();
+    this.persistRows('branches', this.branches, ['id']);
+    this.persistRows('employees', this.employees, ['id']);
+    this.persistRows('subdepots', this.subDepots, ['id']);
+    this.persistRows('hrms_users', this.users, ['id']);
+    this.persistRows('system_settings', [{ key: 'app', value: this.settings }], ['key']);
+    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs'].forEach(t => this.clearTable(t));
   }
 
   getAssignments(employeeId?: string): EmployeeAssignment[] {
@@ -866,14 +986,16 @@ class DataService {
       createdAt: new Date().toISOString()
     };
     this.assignments.push(newAssignment);
-    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+    this.cache();
+    this.persistRows('assignments', [newAssignment], ['id']);
     return newAssignment;
   }
 
   deleteAssignment(id: string): void {
     this.ensureData();
     this.assignments = this.assignments.filter(a => a.id !== id);
-    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
+    this.cache();
+    this.deleteRows('assignments', 'id', [id]);
   }
 
   getAssignmentForEmployeeOnDate(employeeId: string, date: string): EmployeeAssignment | undefined {
@@ -883,6 +1005,17 @@ class DataService {
       date >= a.startDate && 
       date <= a.endDate
     );
+  }
+
+  getUsers(): User[] {
+    this.ensureData();
+    return this.users;
+  }
+
+  setUsers(users: User[]) {
+    this.users = users;
+    this.cache();
+    this.persistRows('hrms_users', users, ['id']);
   }
 }
 

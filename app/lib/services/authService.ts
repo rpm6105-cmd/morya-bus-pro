@@ -1,68 +1,22 @@
 import { User } from '../types';
+import { dataService } from './dataService';
 
-const USERS_KEY = 'hrms_users';
 const CURRENT_USER_KEY = 'hrms_current_user';
 const SESSION_KEY = 'hrms_session';
 
 class AuthService {
   private users: User[] = [];
 
-  constructor() {
-    this.loadUsers();
-  }
-
   private loadUsers() {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem(USERS_KEY);
-    this.users = stored ? JSON.parse(stored) : this.getDefaultUsers();
-    if (!stored) {
-      localStorage.setItem(USERS_KEY, JSON.stringify(this.users));
-    }
+    this.users = dataService.getUsers();
   }
 
   private saveUsers() {
-    localStorage.setItem(USERS_KEY, JSON.stringify(this.users));
-  }
-
-  private getDefaultUsers(): User[] {
-    const users: User[] = [
-      {
-        id: 'admin-001',
-        email: 'admin@moryabuses.com',
-        password: 'admin123',
-        name: 'System Administrator',
-        role: 'ADMIN',
-        createdAt: new Date().toISOString(),
-        isActive: true
-      }
-    ];
-
-    const depots = this.getDepotNames();
-    depots.forEach((depot, index) => {
-      users.push({
-        id: `hr-${String(index + 1).padStart(3, '0')}`,
-        email: `hr.${depot.code.toLowerCase()}@moryabuses.com`,
-        password: `hr${String(index + 1).padStart(3, '0')}`,
-        name: `HR Manager - ${depot.name}`,
-        role: 'HR',
-        depotId: depot.id,
-        createdAt: new Date().toISOString(),
-        isActive: true
-      });
-    });
-
-    return users;
-  }
-
-  private getDepotNames() {
-    return Array.from({ length: 30 }, (_, i) => ({
-      id: `depot-${String(i + 1).padStart(3, '0')}`,
-      name: `Depot ${i + 1}`,
-      code: `D${String(i + 1).padStart(3, '0')}`
-    }));
+    dataService.setUsers(this.users);
   }
 
   async login(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    this.loadUsers();
     const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     
     if (!user) {
@@ -140,6 +94,7 @@ class AuthService {
   }
 
   async createUser(userData: Omit<User, 'id' | 'createdAt' | 'lastLogin'>): Promise<User> {
+    this.loadUsers();
     const user: User = {
       ...userData,
       id: `user-${Date.now()}`,
@@ -151,6 +106,7 @@ class AuthService {
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | null> {
+    this.loadUsers();
     const index = this.users.findIndex(u => u.id === id);
     if (index === -1) return null;
     this.users[index] = { ...this.users[index], ...updates };
@@ -159,6 +115,7 @@ class AuthService {
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<boolean> {
+    this.loadUsers();
     const user = this.users.find(u => u.id === userId);
     if (!user || user.password !== oldPassword) return false;
     user.password = newPassword;
@@ -167,6 +124,7 @@ class AuthService {
   }
 
   async resetPassword(userId: string, newPassword: string): Promise<boolean> {
+    this.loadUsers();
     const user = this.users.find(u => u.id === userId);
     if (!user) return false;
     user.password = newPassword;
@@ -175,6 +133,7 @@ class AuthService {
   }
 
   async toggleUserStatus(userId: string): Promise<boolean> {
+    this.loadUsers();
     const user = this.users.find(u => u.id === userId);
     if (!user) return false;
     user.isActive = !user.isActive;

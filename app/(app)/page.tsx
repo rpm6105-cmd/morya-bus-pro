@@ -34,12 +34,12 @@ export default function Home() {
       <div style={styles.features}>
         <div style={styles.featureCard}>
           <Users size={32} color="#3b82f6" />
-          <h3>2000+ Employees</h3>
+          <h3>40+ Employees</h3>
           <p>Manage workforce across all locations</p>
         </div>
         <div style={styles.featureCard}>
           <Building2 size={32} color="#10b981" />
-          <h3>30 Depots</h3>
+          <h3>2 Depots</h3>
           <p>Centralized depot management</p>
         </div>
         <div style={styles.featureCard}>

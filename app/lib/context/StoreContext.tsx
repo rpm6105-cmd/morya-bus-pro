@@ -40,12 +40,19 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    setEmployees(dataService.getEmployees());
-    setBranches(dataService.getBranches());
-    const attendanceData = dataService.getAttendance();
-    if (typeof attendanceData === 'object' && attendanceData !== null) {
-      setAttendance(attendanceData as Attendance);
-    }
+    let cancelled = false;
+    const load = async () => {
+      await dataService.initialize();
+      if (cancelled) return;
+      setEmployees(dataService.getEmployees());
+      setBranches(dataService.getBranches());
+      const attendanceData = dataService.getAttendance();
+      if (typeof attendanceData === 'object' && attendanceData !== null) {
+        setAttendance(attendanceData as Attendance);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const addEmployee = (emp: Employee) => {
