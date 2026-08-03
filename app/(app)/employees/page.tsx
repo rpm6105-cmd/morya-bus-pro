@@ -292,16 +292,22 @@ export default function EmployeesPage() {
       const masterEmployeeId = rejoinChoice === 'REJOIN' && aadhaarMatches.length > 0
         ? aadhaarMatches[0].masterEmployeeId
         : undefined;
-      const emp = dataService.addEmployee(payload as any, masterEmployeeId);
-      if (masterEmployeeId && aadhaarMatches.length > 0) {
-        aadhaarMatches.forEach(m => {
-          if (m.status === 'ACTIVE') {
-            dataService.updateEmployee(m.id, { status: 'INACTIVE' });
-          }
-        });
-        toast.success(`Employee rejoined successfully. Linked to ${aadhaarMatches[0].name}'s record (${aadhaarMatches.length + 1} total stints)`);
-      } else {
-        toast.success('Employee created successfully');
+
+      if (isAdmin) {
+        const emp = dataService.addEmployee(payload as any, masterEmployeeId);
+        if (masterEmployeeId && aadhaarMatches.length > 0) {
+          aadhaarMatches.forEach(m => {
+            if (m.status === 'ACTIVE') {
+              dataService.updateEmployee(m.id, { status: 'INACTIVE' });
+            }
+          });
+          toast.success(`Employee rejoined successfully. Linked to ${aadhaarMatches[0].name}'s record (${aadhaarMatches.length + 1} total stints)`);
+        } else {
+          toast.success('Employee created successfully');
+        }
+      } else if (user) {
+        dataService.requestEmployeeCreate({ ...payload, masterEmployeeId } as any, user);
+        toast.success('New employee submitted for Admin approval. Employee will be created once approved.');
       }
     }
 
@@ -315,17 +321,21 @@ export default function EmployeesPage() {
     if (transferToDepotId === selectedEmployee.branchId) return toast.error('Employee is already in that depot');
     if (!transferDate) return toast.error('Please select a transfer date');
 
-    dataService.transferEmployee(selectedEmployee.id, transferToDepotId, transferReason, transferDate, user?.id);
-
-    const updated = dataService.getEmployeeById(selectedEmployee.id);
-    if (updated) {
-      setSelectedEmployee(updated);
-      setStints(dataService.getEmployeeStints(updated.masterEmployeeId));
+    if (isAdmin) {
+      dataService.transferEmployee(selectedEmployee.id, transferToDepotId, transferReason, transferDate, user?.id);
+      const updated = dataService.getEmployeeById(selectedEmployee.id);
+      if (updated) {
+        setSelectedEmployee(updated);
+        setStints(dataService.getEmployeeStints(updated.masterEmployeeId));
+      }
+      toast.success(`Employee transferred to ${branches.find(b => b.id === transferToDepotId)?.name}`);
+    } else if (user) {
+      dataService.requestEmployeeTransfer(selectedEmployee, transferToDepotId, transferReason, transferDate, user);
+      toast.success('Transfer submitted for Admin approval. Employee will be moved once approved.');
     }
     setShowTransferForm(false);
     setTransferToDepotId('');
     setTransferReason('');
-    toast.success(`Employee transferred to ${branches.find(b => b.id === transferToDepotId)?.name}`);
     loadData();
   };
 
@@ -369,8 +379,13 @@ export default function EmployeesPage() {
 
   const handleTerminateEmployee = (emp: Employee) => {
     if (confirm(`Mark ${emp.name} as TERMINATED?\n\nTheir record will be retained and marked Terminated — data is never deleted.`)) {
-      dataService.terminateEmployee(emp.id, user?.id);
-      toast.success(`${emp.name} marked as Terminated. Data retained.`);
+      if (isAdmin) {
+        dataService.terminateEmployee(emp.id, user?.id);
+        toast.success(`${emp.name} marked as Terminated. Data retained.`);
+      } else if (user) {
+        dataService.requestEmployeeTerminate(emp, user);
+        toast.success(`Termination for ${emp.name} submitted for Admin approval.`);
+      }
       loadData();
     }
   };
@@ -445,12 +460,10 @@ export default function EmployeesPage() {
           <p style={styles.subtitle}>{filteredEmployees.length} employees found</p>
         </div>
         <div style={styles.headerActions}>
-          {isAdmin && (
-            <button style={styles.addButton} onClick={openAddModal}>
-              <Plus size={16} />
-              Add Employee
-            </button>
-          )}
+          <button style={styles.addButton} onClick={openAddModal}>
+            <Plus size={16} />
+            {isAdmin ? 'Add Employee' : 'Request New Employee'}
+          </button>
           <button style={styles.exportButton} onClick={handleExportCSV}>
             <Download size={16} />
             Export CSV
@@ -614,11 +627,9 @@ export default function EmployeesPage() {
                     <button onClick={() => openEditModal(emp)} style={styles.actionBtn} title={isAdmin ? 'Edit' : 'Request Changes'}>
                       <Edit2 size={16} color="#3b82f6" />
                     </button>
-                    {isAdmin && (
-                      <button onClick={() => handleTerminateEmployee(emp)} style={styles.actionBtn} title="Terminate (data retained)">
-                        <UserX size={16} color="#ef4444" />
-                      </button>
-                    )}
+                    <button onClick={() => handleTerminateEmployee(emp)} style={styles.actionBtn} title={isAdmin ? 'Terminate (data retained)' : 'Request Termination (Admin approval)'}>
+                      <UserX size={16} color="#ef4444" />
+                    </button>
                     <button onClick={() => generateOfferLetter(emp)} style={styles.actionBtn} title="Offer Letter">
                       <FileText size={16} color="#10b981" />
                     </button>
@@ -816,27 +827,25 @@ export default function EmployeesPage() {
                       <ArrowLeftRight size={14} color="#10b981" /> Depot Transfers
                     </span>
                   </h4>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setShowTransferForm(!showTransferForm)}
-                      style={{
-                        background: showTransferForm ? '#f1f5f9' : '#10b981',
-                        color: showTransferForm ? '#334155' : 'white',
-                        border: 'none',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Plus size={12} />
-                      {showTransferForm ? 'Hide Form' : 'Transfer to Depot'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setShowTransferForm(!showTransferForm)}
+                    style={{
+                      background: showTransferForm ? '#f1f5f9' : '#10b981',
+                      color: showTransferForm ? '#334155' : 'white',
+                      border: 'none',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Plus size={12} />
+                    {showTransferForm ? 'Hide Form' : isAdmin ? 'Transfer to Depot' : 'Request Transfer'}
+                  </button>
                 </div>
 
                 {showTransferForm && (
@@ -1052,7 +1061,7 @@ export default function EmployeesPage() {
         <div style={styles.modalOverlay} onClick={() => setShowAddModal(false)}>
           <div style={{ ...styles.modal, maxWidth: '700px' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h2>{editingEmployee ? `Edit Employee — ${editingEmployee.name}` : 'Add New Employee'}</h2>
+              <h2>{editingEmployee ? `Edit Employee — ${editingEmployee.name}` : isAdmin ? 'Add New Employee' : 'Request New Employee'}</h2>
               <button onClick={() => setShowAddModal(false)} style={styles.closeBtn}>
                 <X size={20} />
               </button>
@@ -1061,6 +1070,11 @@ export default function EmployeesPage() {
               {editingEmployee && !isAdmin && (
                 <div style={{ marginBottom: '16px', padding: '10px 14px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', fontSize: '12px', color: '#92400e' }}>
                   You are requesting changes to this employee. Admin approval is required before the changes take effect.
+                </div>
+              )}
+              {!editingEmployee && !isAdmin && (
+                <div style={{ marginBottom: '16px', padding: '10px 14px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', fontSize: '12px', color: '#92400e' }}>
+                  This new employee will be submitted to Admin for approval before being created.
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -1238,7 +1252,7 @@ export default function EmployeesPage() {
               </button>
               <button onClick={handleSaveEmployee} style={styles.generateBtn}>
                 <Plus size={16} />
-                {editingEmployee ? 'Save Changes' : 'Save Employee'}
+                {editingEmployee ? (isAdmin ? 'Save Changes' : 'Submit Changes for Approval') : isAdmin ? 'Save Employee' : 'Submit for Approval'}
               </button>
             </div>
           </div>

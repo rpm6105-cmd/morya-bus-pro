@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { Employee, PayrollEntry } from '../../lib/types';
-import { calculatePayroll } from '../../lib/utils/payrollCalc';
 import ExcelJS from 'exceljs';
 import {
   Calculator, Download, Printer, ChevronLeft, ChevronRight, FileSpreadsheet, Users
@@ -20,96 +19,49 @@ export default function SalarySheetPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toLocaleString('default', { month: 'short' }));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [rows, setRows] = useState<PayrollEntry[]>([]);
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const monthIndex = MONTHS.indexOf(selectedMonth) + 1;
   const monthLabel = FULL_MONTHS[monthIndex - 1];
 
-  const buildEntries = () => {
-    const depotId = isAdmin ? undefined : user?.depotId;
-    const employees = dataService.getEmployees(depotId).filter(e => e.status === 'ACTIVE');
-    const settings = dataService.getSettings();
-    const existing = isAdmin
+  const loadRows = () => {
+    const entries = isAdmin
       ? dataService.getPayroll(selectedMonth, selectedYear)
       : dataService.getPayrollByBranch(user?.depotId || '', selectedMonth, selectedYear);
+    const processed = entries.filter(p => p.status !== 'DRAFT');
+    const sorted = processed.sort((a, b) => {
+      const na = dataService.getEmployeeById(a.employeeId)?.name || '';
+      const nb = dataService.getEmployeeById(b.employeeId)?.name || '';
+      return na.localeCompare(nb);
+    });
+    setRows(sorted);
+  };
 
-    const entries: PayrollEntry[] = [];
-    for (const emp of employees) {
-      const calc = calculatePayroll({
-        employee: emp,
-        branch: dataService.getBranchById(emp.branchId),
-        attendanceRecords: dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>,
-        overtimeEntries: dataService.getOvertime(emp.id, monthIndex, selectedYear),
-        settings,
-        month: monthIndex,
-        year: selectedYear,
-      });
+  useEffect(() => {
+    loadRows();
+  }, [selectedMonth, selectedYear, user?.depotId, isAdmin]);
 
-      const entry: Omit<PayrollEntry, 'id'> = {
-        employeeId: emp.id,
-        month: selectedMonth,
-        year: selectedYear,
-        depotId: emp.branchId,
-        basicSalary: calc.fullBasic,
-        hra: calc.fullHra,
-        conveyance: calc.fullConveyance,
-        otherAllowances: calc.fullAllowances,
-        grossSalary: calc.fullGross,
-        presentDays: calc.presentDays,
-        paidLeaveDays: calc.paidLeaveDays,
-        holidayDays: calc.holidayDays,
-        weekOffDays: calc.weekOffDays,
-        absentDays: calc.absentDays,
-        lopDays: calc.lopDays,
-        lopDeduction: calc.lopDeduction,
-        overtimeHours: calc.overtimeHours,
-        overtimeDays: calc.overtimeDays,
-        overtimeType: calc.overtimeHours > 0 ? 'HOURLY' : calc.overtimeDays > 0 ? 'FULL_DAY' : undefined,
-        overtimeAmount: calc.overtimeAmount,
-        driverIncentive: calc.driverIncentive,
-        incentive: calc.incentive,
-        totalEarnings: calc.totalEarnings,
-        pfDeduction: calc.pfDeduction,
-        esicDeduction: calc.esicDeduction,
-        tdsDeduction: calc.tdsDeduction,
-        ptDeduction: calc.ptDeduction,
-        otherDeductions: 0,
-        totalDeductions: calc.totalDeductions,
-        netSalary: calc.netSalary,
-        status: 'PROCESSED',
-        processedBy: user?.id || 'system',
-        processedAt: new Date().toISOString(),
-      };
-
-      const prior = existing.find(p => p.employeeId === emp.id);
-      if (prior) {
-        if (prior.status !== 'DRAFT') {
-          entries.push(prior);
-          continue;
-        }
-        const updated = dataService.updatePayroll(prior.id, { ...entry, status: 'PROCESSED' });
-        if (updated) entries.push(updated);
-      } else {
-        entries.push(dataService.addPayroll(entry));
+  useEffect(() => {
+    const onUpdate = () => loadRows();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('hrms_')) {
+        dataService.syncFromCache();
+        onUpdate();
       }
-    }
-    return entries;
-  };
-
-  const generate = () => {
-    setProcessing(true);
-    try {
-      const entries = buildEntries();
-      setRows(entries);
-      setGeneratedAt(new Date().toLocaleString());
-      toast.success(`Salary sheet generated for ${entries.length} employees`);
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to generate salary sheet');
-    }
-    setProcessing(false);
-  };
+    };
+    window.addEventListener('hrms-payroll-updated', onUpdate);
+    window.addEventListener('hrms-data-refreshed', onUpdate);
+    window.addEventListener('storage', onStorage);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') dataService.refreshLiveData();
+    }, 10000);
+    return () => {
+      window.removeEventListener('hrms-payroll-updated', onUpdate);
+      window.removeEventListener('hrms-data-refreshed', onUpdate);
+      window.removeEventListener('storage', onStorage);
+      clearInterval(t);
+    };
+  }, [selectedMonth, selectedYear, user?.depotId, isAdmin]);
 
   const exportExcel = async () => {
     if (rows.length === 0) return;
@@ -373,10 +325,9 @@ export default function SalarySheetPage() {
             <Printer size={16} />
             Print
           </button>
-          <button style={styles.processBtn} onClick={generate} disabled={processing}>
-            <Calculator size={16} />
-            {processing ? 'Generating...' : 'Generate Salary Sheet'}
-          </button>
+          <div style={styles.autoBadge}>
+            Auto-generated from processed payroll
+          </div>
         </div>
       </div>
 
@@ -432,17 +383,17 @@ export default function SalarySheetPage() {
         <div style={styles.tableHeader}>
           <h3>Salary Sheet - {monthLabel} {selectedYear}</h3>
           <span style={styles.countBadge}>
-            {rows.length > 0 && generatedAt ? `Generated ${generatedAt}` : 'Not generated yet'}
+            {rows.length > 0 ? `${rows.length} employees • from processed payroll` : 'No processed payroll for this month'}
           </span>
         </div>
 
         {rows.length === 0 ? (
           <div style={styles.emptyState}>
             <FileSpreadsheet size={48} color="#94a3b8" />
-            <p>No salary sheet generated for {selectedMonth} {selectedYear}</p>
-            <button style={styles.emptyBtn} onClick={generate}>
-              Generate Salary Sheet Now
-            </button>
+            <p>No salary sheet for {selectedMonth} {selectedYear}</p>
+            <p style={{ fontSize: '13px', color: '#64748b', margin: '8px 0 0' }}>
+              The salary sheet is generated automatically once the Admin processes payroll for this month.
+            </p>
           </div>
         ) : (
           <div style={styles.tableWrapper}>
@@ -548,6 +499,7 @@ const styles: Record<string, React.CSSProperties> = {
   monthLabel: { fontSize: '14px', fontWeight: '600', minWidth: '100px', textAlign: 'center' },
   exportBtn: { padding: '10px 16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: '500', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
   printBtn: { padding: '10px 16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: '500', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
+  autoBadge: { padding: '10px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', fontSize: '13px', fontWeight: '600', color: '#065f46', display: 'flex', alignItems: 'center', gap: '8px' },
   processBtn: { padding: '10px 16px', background: '#10b981', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '500', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' },
   statCard: { background: '#fff', borderRadius: '12px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },

@@ -41,24 +41,6 @@ export default function LoginPage() {
     }
   };
 
-  const quickLogin = async (type: 'admin' | 'hr') => {
-    setLoading(true);
-    if (type === 'admin') {
-      const result = await login('admin@moryabuses.com', 'admin123');
-      if (result.success) {
-        toast.success('Admin login successful!');
-        router.push('/dashboard');
-      }
-    } else {
-      const result = await login('hr.D001@moryabuses.com', 'hr001');
-      if (result.success) {
-        toast.success('HR login successful!');
-        router.push('/dashboard');
-      }
-    }
-    setLoading(false);
-  };
-
   const s = isMobile ? mobileStyles : desktopStyles;
 
   return (
@@ -105,17 +87,6 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-
-          <div style={s.divider}><span style={s.dividerText}>Quick Login</span></div>
-
-          <div style={s.quickBtns}>
-            <button onClick={() => quickLogin('admin')} style={s.quickBtn} disabled={loading}>
-              <Shield size={16} /> Admin
-            </button>
-            <button onClick={() => quickLogin('hr')} style={s.quickBtn} disabled={loading}>
-              <Bus size={16} /> HR (Depot 1)
-            </button>
-          </div>
 
           <div style={s.creds}>
             <p style={s.credsTitle}>Demo Credentials</p>

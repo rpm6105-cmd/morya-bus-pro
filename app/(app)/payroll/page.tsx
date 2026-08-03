@@ -7,7 +7,7 @@ import { Employee, PayrollEntry, OvertimeType } from '../../lib/types';
 import { calculatePayroll as calcPayroll } from '../../lib/utils/payrollCalc';
 import {
   Calculator, Download, DollarSign, Users, TrendingUp,
-  ChevronLeft, ChevronRight, FileText, Printer, CreditCard, Clock
+  ChevronLeft, ChevronRight, FileText, Printer, CreditCard, Clock, ShieldAlert
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -89,8 +89,35 @@ export default function PayrollPage() {
 
   const processPayroll = async () => {
     setProcessing(true);
-    
-    for (const emp of employees.filter(e => e.status === 'ACTIVE')) {
+
+    const activeEmployees = employees.filter(e => e.status === 'ACTIVE');
+    const daysInMonth = new Date(selectedYear, monthIndex, 0).getDate();
+    const incomplete: { name: string; count: number }[] = [];
+    for (const emp of activeEmployees) {
+      const att = dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>;
+      let unmarked = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${selectedYear}-${String(monthIndex).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayOfWeek = new Date(selectedYear, monthIndex - 1, d).getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        if (!att[dateStr]) unmarked++;
+      }
+      if (unmarked > 0) incomplete.push({ name: emp.name, count: unmarked });
+    }
+
+    if (incomplete.length > 0) {
+      const names = incomplete.slice(0, 5).map(x => `• ${x.name} (${x.count} unmarked)`).join('\n');
+      const more = incomplete.length > 5 ? `\n...and ${incomplete.length - 5} more` : '';
+      const proceed = confirm(
+        `Attendance is incomplete for ${incomplete.length} employee(s).\n\n${names}${more}\n\nPayroll will be calculated only from the recorded attendance. Continue processing?`
+      );
+      if (!proceed) {
+        setProcessing(false);
+        return;
+      }
+    }
+
+    for (const emp of activeEmployees) {
       const existingEntry = payrollEntries.find(p => p.employeeId === emp.id);
       if (!existingEntry || existingEntry.status === 'DRAFT') {
         const payroll = calculatePayroll(emp);
@@ -394,6 +421,22 @@ export default function PayrollPage() {
       ot: entry?.overtimeAmount || 0
     };
   });
+
+  if (!isAdmin) {
+    return (
+      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+            <ShieldAlert size={32} color="#dc2626" />
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '16px 0 8px' }}>Admin Only</h2>
+          <p style={{ fontSize: '14px', color: '#64748b', maxWidth: '420px', margin: '0 auto' }}>
+            Payroll processing is restricted to the Administrator. HR can view the processed results in the Salary Sheet.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>

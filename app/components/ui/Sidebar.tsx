@@ -87,7 +87,6 @@ const Sidebar = ({ collapsed = false, onToggle }: { collapsed?: boolean; onToggl
     { name: 'Employees', icon: Users, path: '/employees' },
     { name: 'Attendance', icon: Calendar, path: '/attendance' },
     { name: 'Overtime', icon: Clock, path: '/overtime' },
-    { name: 'Payroll', icon: Calculator, path: '/payroll' },
     { name: 'Salary Sheet', icon: FileSpreadsheet, path: '/salary-sheet' },
     { name: 'My Requests', icon: ClipboardCheck, path: '/approvals' },
     { name: 'Reports', icon: BarChart3, path: '/reports' },

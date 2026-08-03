@@ -98,7 +98,7 @@ export default function ApprovalsPage() {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(req.changes || {}).map(([key, value]) => {
+            {Object.entries(req.changes || {}).filter(([key]) => key !== 'masterEmployeeId' && key !== '__action').map(([key, value]) => {
               const oldValue = (employee as any)?.[key];
               const display = (v: any) => key === 'branchId' ? (dataService.getBranchById(String(v))?.name || formatValue(v)) : formatValue(v);
               return (

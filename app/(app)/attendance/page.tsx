@@ -14,7 +14,7 @@ import {
   getDay,
   getDaysInMonth
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar, Download, Upload, Users, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Download, Upload, Users, CheckCircle, Clock, TrendingUp, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ATTENDANCE_OPTIONS: { status: AttendanceStatus; label: string; color: string; bgColor: string; gradient: string }[] = [
@@ -40,8 +40,35 @@ export default function AttendancePage() {
   const [bulkStatus, setBulkStatus] = useState<AttendanceStatus>('P');
   const [hoveredDate, setHoveredDate] = useState('');
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const payrollLocked = dataService.isPayrollProcessed(selectedMonth, selectedYear);
+
   useEffect(() => {
     loadData();
+  }, [selectedBranch, user, selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    const reload = () => loadData();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('hrms_')) {
+        dataService.syncFromCache();
+        reload();
+      }
+    };
+    window.addEventListener('hrms-attendance-updated', reload);
+    window.addEventListener('hrms-payroll-updated', reload);
+    window.addEventListener('hrms-data-refreshed', reload);
+    window.addEventListener('storage', onStorage);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') dataService.refreshLiveData();
+    }, 8000);
+    return () => {
+      window.removeEventListener('hrms-attendance-updated', reload);
+      window.removeEventListener('hrms-payroll-updated', reload);
+      window.removeEventListener('hrms-data-refreshed', reload);
+      window.removeEventListener('storage', onStorage);
+      clearInterval(t);
+    };
   }, [selectedBranch, user, selectedMonth, selectedYear]);
 
   const loadData = () => {
@@ -95,6 +122,15 @@ export default function AttendancePage() {
   };
 
   const cycleStatus = (dateStr: string, currentStatus?: AttendanceStatus) => {
+    if (payrollLocked) {
+      toast.error('Attendance is locked. Payroll has already been processed for this month.');
+      return;
+    }
+    if (dateStr > todayStr) {
+      toast.error('Cannot mark attendance for future dates.');
+      return;
+    }
+
     const statuses: AttendanceStatus[] = ['P', 'A', 'LOP'];
     const currentIdx = currentStatus ? statuses.indexOf(currentStatus) : -1;
     const nextIdx = (currentIdx + 1) % statuses.length;
@@ -114,12 +150,18 @@ export default function AttendancePage() {
   };
 
   const handleBulkUpdate = () => {
+    if (payrollLocked) {
+      toast.error('Attendance is locked. Payroll has already been processed for this month.');
+      return;
+    }
+
     filteredEmployees.forEach(emp => {
       for (let d = 1; d <= totalDays; d++) {
         const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const dayOfWeek = getDay(new Date(selectedYear, selectedMonth - 1, d));
         
         if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        if (dateStr > todayStr) continue;
         
         const record: AttendanceRecord = {
           employeeId: emp.id,
@@ -231,7 +273,7 @@ export default function AttendancePage() {
               <ChevronRight size={18} color="#475569" />
             </button>
           </div>
-          <button onClick={() => setShowBulkModal(true)} style={styles.actionBtn}>
+          <button onClick={() => setShowBulkModal(true)} style={payrollLocked ? { ...styles.actionBtn, opacity: 0.5, cursor: 'not-allowed' } : styles.actionBtn} disabled={payrollLocked}>
             <Upload size={16} />
             Bulk Update
           </button>
@@ -264,6 +306,13 @@ export default function AttendancePage() {
 
       {selectedEmployee && (
         <>
+          {payrollLocked && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', padding: '12px 16px', borderRadius: '12px', marginTop: '16px', fontSize: '13px', fontWeight: '600' }}>
+              <Lock size={16} />
+              This month's attendance is locked — payroll has already been processed. No changes allowed.
+            </div>
+          )}
+
           <div style={styles.statsRow}>
             {statCards.map(card => {
               const Icon = card.icon;
@@ -298,11 +347,13 @@ export default function AttendancePage() {
                   const status = record?.status;
                   const opt = status ? ATTENDANCE_OPTIONS.find(o => o.status === status) : undefined;
                   const isHovered = hoveredDate === dateStr;
+                  const isFuture = dateStr > todayStr;
+                  const isLocked = payrollLocked;
 
                   return (
                     <div
                       key={dateStr}
-                      title={`${format(day, 'd MMM yyyy')}${opt ? ` — ${opt.label}` : ' — click to mark'}`}
+                      title={`${format(day, 'd MMM yyyy')}${opt ? ` — ${opt.label}` : ' — click to mark'}${isFuture ? ' (future date)' : ''}${isLocked ? ' (locked)' : ''}`}
                       onMouseEnter={() => setHoveredDate(dateStr)}
                       onMouseLeave={() => setHoveredDate('')}
                       onClick={() => cycleStatus(dateStr, status as AttendanceStatus)}
@@ -316,7 +367,9 @@ export default function AttendancePage() {
                             : '1px solid #e2e8f0',
                         boxShadow: isHovered ? '0 6px 16px rgba(15,23,42,0.12)' : '0 1px 2px rgba(15,23,42,0.04)',
                         transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-                        cursor: 'pointer',
+                        cursor: (isLocked || isFuture) ? 'not-allowed' : 'pointer',
+                        opacity: isFuture ? 0.45 : 1,
+                        filter: isLocked ? 'grayscale(0.4)' : 'none',
                       }}
                     >
                       <span style={{
@@ -398,7 +451,7 @@ export default function AttendancePage() {
                   ))}
                 </div>
                 <p style={{ fontSize: '11px', color: '#94a3b8', margin: '12px 0 0', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
-                  Day click cycles: <strong>Present → Absent → LOP</strong>. Use Bulk Update for leaves/holidays.
+                  Day click cycles: <strong>Present → Absent → LOP</strong>. Future dates are disabled. Attendance locks once payroll is processed for the month.
                 </p>
               </div>
             </div>

@@ -3,7 +3,8 @@
 import { 
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
-  IncentiveTier, User, EmployeeChangeRequest, AppNotification, NotificationType
+  IncentiveTier, User, EmployeeChangeRequest, AppNotification, NotificationType,
+  ChangeRequestAction
 } from '../types';
 import { normalizeAadhaar } from '../utils/incentive';
 import { calculatePayroll as payrollCalc } from '../utils/payrollCalc';
@@ -214,6 +215,22 @@ class DataService {
       if (error) throw error;
     } catch (e) {
       console.error(`Supabase upsert ${table} failed`, e);
+    }
+  }
+
+  private async persistChangeRequest(req: EmployeeChangeRequest) {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { error } = await supabase.from('employee_change_requests').upsert([req], { onConflict: 'id' });
+      if (error) throw error;
+    } catch (e: any) {
+      if (e && e.code === 'PGRST204' && typeof e.message === 'string' && e.message.includes("'action'")) {
+        const { action, ...withoutAction } = req;
+        const { error: retryError } = await supabase.from('employee_change_requests').upsert([withoutAction as any], { onConflict: 'id' });
+        if (retryError) console.error('Supabase upsert employee_change_requests (retry) failed', retryError);
+        return;
+      }
+      console.error('Supabase upsert employee_change_requests failed', e);
     }
   }
 
@@ -736,7 +753,7 @@ class DataService {
     return this.changeRequests.filter(r => r.status === 'PENDING').slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  createChangeRequest(employee: Employee, changes: Partial<Employee>, user: User): EmployeeChangeRequest | null {
+  createChangeRequest(employee: Employee, changes: Partial<Employee>, user: User, action: ChangeRequestAction = 'UPDATE'): EmployeeChangeRequest | null {
     this.ensureData();
     const changedKeys = (Object.keys(changes) as (keyof Employee)[]).filter(k => {
       const cur = employee[k];
@@ -748,27 +765,100 @@ class DataService {
     const diff: Partial<Employee> = {} as Partial<Employee>;
     changedKeys.forEach(k => { (diff as any)[k] = (changes as any)[k]; });
 
-    const request: EmployeeChangeRequest = {
-      id: `cr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    return this.pushChangeRequest({
       employeeId: employee.id,
       employeeName: employee.name,
       summary: changedKeys.join(', '),
-      requestedBy: user.id,
-      requestedByName: user.name,
       changes: diff,
+      action,
+      requestedBy: user.id,
+      requestedByName: user.name
+    });
+  }
+
+  requestEmployeeCreate(payload: Partial<Employee>, user: User): EmployeeChangeRequest {
+    this.ensureData();
+    return this.pushChangeRequest({
+      employeeId: '',
+      employeeName: payload.name || 'New Employee',
+      summary: 'New employee creation',
+      changes: payload as Partial<Employee>,
+      action: 'CREATE',
+      requestedBy: user.id,
+      requestedByName: user.name
+    });
+  }
+
+  requestEmployeeTerminate(employee: Employee, user: User): EmployeeChangeRequest {
+    this.ensureData();
+    return this.pushChangeRequest({
+      employeeId: employee.id,
+      employeeName: employee.name,
+      summary: 'Termination',
+      changes: { status: 'TERMINATED' },
+      action: 'TERMINATE',
+      requestedBy: user.id,
+      requestedByName: user.name
+    });
+  }
+
+  requestEmployeeTransfer(employee: Employee, toDepotId: string, reason: string, transferDate: string, user: User): EmployeeChangeRequest {
+    this.ensureData();
+    const transfer = {
+      fromDepotId: employee.branchId,
+      toDepotId,
+      transferDate: transferDate || new Date().toISOString().split('T')[0],
+      reason: reason?.trim() || 'Inter-depot transfer',
+      status: 'APPROVED' as const
+    };
+    return this.pushChangeRequest({
+      employeeId: employee.id,
+      employeeName: employee.name,
+      summary: `Transfer to ${toDepotId}`,
+      changes: {
+        branchId: toDepotId,
+        baseDepotId: employee.baseDepotId || employee.branchId,
+        transferHistory: [...(employee.transferHistory || []), transfer]
+      },
+      action: 'TRANSFER',
+      requestedBy: user.id,
+      requestedByName: user.name
+    });
+  }
+
+  private pushChangeRequest(input: {
+    employeeId: string;
+    employeeName: string;
+    summary: string;
+    changes: Partial<Employee>;
+    action: ChangeRequestAction;
+    requestedBy: string;
+    requestedByName: string;
+  }): EmployeeChangeRequest {
+    this.ensureData();
+    const changes = { ...(input.changes || {}), __action: input.action } as Partial<Employee>;
+    const request: EmployeeChangeRequest = {
+      id: `cr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      employeeId: input.employeeId,
+      employeeName: input.employeeName,
+      summary: input.summary,
+      requestedBy: input.requestedBy,
+      requestedByName: input.requestedByName,
+      changes,
+      action: input.action,
       status: 'PENDING',
       createdAt: new Date().toISOString()
     };
     this.changeRequests.push(request);
     this.cache();
-    this.persistRows('employee_change_requests', [request], ['id']);
+    this.persistChangeRequest(request);
 
     const admins = this.users.filter(u => u.role === 'ADMIN');
     admins.forEach(admin => {
       this.addNotification({
         userId: admin.id,
         title: 'Employee change pending approval',
-        message: `${user.name} requested ${changedKeys.length} change(s) for ${employee.name}.`,
+        message: `${input.requestedByName} requested ${input.action === 'CREATE' ? 'new employee creation' : input.action === 'TERMINATE' ? 'termination' : input.action === 'TRANSFER' ? 'transfer' : `${Object.keys(input.changes).filter(k => k !== '__action').length} change(s)`} for ${input.employeeName}.`,
         type: 'APPROVAL',
         link: '/approvals'
       });
@@ -787,7 +877,24 @@ class DataService {
     const request = this.changeRequests[idx];
     if (request.status !== 'PENDING') return request;
 
-    this.updateEmployee(request.employeeId, request.changes);
+    const action: ChangeRequestAction = (request.action as ChangeRequestAction) || (request.changes as any)?.__action || 'UPDATE';
+    const applied = { ...(request.changes || {}) } as any;
+    delete applied.__action;
+
+    if (action === 'CREATE') {
+      const masterEmployeeId = applied.masterEmployeeId;
+      delete applied.masterEmployeeId;
+      if (masterEmployeeId) {
+        this.employees.forEach(prev => {
+          if (prev.masterEmployeeId === masterEmployeeId && prev.status === 'ACTIVE') {
+            this.updateEmployee(prev.id, { status: 'INACTIVE' });
+          }
+        });
+      }
+      this.addEmployee(applied, masterEmployeeId);
+    } else {
+      this.updateEmployee(request.employeeId, applied);
+    }
 
     this.changeRequests[idx] = {
       ...request,
@@ -797,12 +904,12 @@ class DataService {
       reviewedAt: new Date().toISOString()
     };
     this.cache();
-    this.persistRows('employee_change_requests', [this.changeRequests[idx]], ['id']);
+    this.persistChangeRequest(this.changeRequests[idx]);
 
     this.addNotification({
       userId: request.requestedBy,
       title: 'Change request approved',
-      message: `Your changes to ${request.employeeName} (${request.summary}) were approved by ${reviewer.name} and applied.`,
+      message: `${action === 'CREATE' ? `${request.employeeName} has been created` : action === 'TERMINATE' ? `${request.employeeName} has been terminated` : action === 'TRANSFER' ? `Transfer for ${request.employeeName} applied` : `Your changes to ${request.employeeName} (${request.summary}) were approved`} by ${reviewer.name}.`,
       type: 'APPROVAL',
       link: '/approvals'
     });
@@ -829,7 +936,7 @@ class DataService {
       remarks: remarks?.trim()
     };
     this.cache();
-    this.persistRows('employee_change_requests', [this.changeRequests[idx]], ['id']);
+    this.persistChangeRequest(this.changeRequests[idx]);
 
     this.addNotification({
       userId: request.requestedBy,
@@ -992,27 +1099,92 @@ class DataService {
 
   setAttendance(employeeId: string, date: string, record: AttendanceRecord) {
     this.ensureData();
+    if (this.isAttendanceLocked(date)) return false;
     if (!this.attendance[employeeId]) {
       this.attendance[employeeId] = {};
     }
     this.attendance[employeeId][date] = record;
     this.cache();
     this.persistRows('attendance', [{ ...record, employeeId, date }], ['employeeId', 'date']);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-attendance-updated'));
+    }
+    return true;
   }
 
   bulkSetAttendance(records: AttendanceRecord[]) {
     this.ensureData();
-    records.forEach(r => {
+    const allowed = records.filter(r => !this.isAttendanceLocked(r.date));
+    allowed.forEach(r => {
       if (!this.attendance[r.employeeId]) {
         this.attendance[r.employeeId] = {};
       }
       this.attendance[r.employeeId][r.date] = r;
     });
     this.cache();
-    const rows = records.map(r => ({ ...r, employeeId: r.employeeId, date: r.date }));
+    const rows = allowed.map(r => ({ ...r, employeeId: r.employeeId, date: r.date }));
     const chunkSize = 500;
     for (let i = 0; i < rows.length; i += chunkSize) {
       this.persistRows('attendance', rows.slice(i, i + chunkSize), ['employeeId', 'date']);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-attendance-updated'));
+    }
+  }
+
+  isAttendanceLocked(date: string): boolean {
+    if (!date || date.length < 10) return false;
+    const day = date.slice(0, 10);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (day > todayStr) return true;
+    const month = parseInt(day.slice(5, 7), 10);
+    const year = parseInt(day.slice(0, 4), 10);
+    if (!month || !year) return false;
+    return this.isPayrollProcessed(month, year);
+  }
+
+  isPayrollProcessed(month: number, year: number): boolean {
+    this.ensureData();
+    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1];
+    return this.payroll.some(p => p.month === m && p.year === year && p.status !== 'DRAFT');
+  }
+
+  syncFromCache() {
+    if (typeof window === 'undefined') return;
+    this.loadFromLocalCache();
+  }
+
+  async refreshLiveData() {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const [attRes, otRes, payRes, empRes] = await Promise.all([
+        supabase.from('attendance').select('*').limit(100000),
+        supabase.from('overtime').select('*').limit(100000),
+        supabase.from('payroll').select('*').limit(100000),
+        supabase.from('employees').select('*').limit(100000),
+      ]);
+      if (attRes.error) throw attRes.error;
+      if (otRes.error) throw otRes.error;
+      if (payRes.error) throw payRes.error;
+      if (empRes.error) throw empRes.error;
+
+      const attendanceMap: Attendance = { ...this.attendance };
+      (attRes.data || []).forEach((row: any) => {
+        if (!attendanceMap[row.employeeId]) attendanceMap[row.employeeId] = {};
+        const { employeeId, date, ...rest } = row;
+        attendanceMap[employeeId][date] = { employeeId, date, ...rest } as AttendanceRecord;
+      });
+      this.attendance = attendanceMap;
+      if (otRes.data) this.overtimeEntries = otRes.data;
+      if (payRes.data) this.payroll = payRes.data;
+      if (empRes.data) this.employees = empRes.data;
+      this.cache();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('hrms-data-refreshed'));
+      }
+    } catch (e) {
+      console.error('Live refresh failed', e);
     }
   }
 
@@ -1054,6 +1226,27 @@ class DataService {
       };
       this.cache();
       this.persistRows('overtime', [this.overtimeEntries[index]], ['id']);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('hrms-data-refreshed'));
+      }
+    }
+  }
+
+  rejectOvertime(overtimeId: string, rejectedBy: string) {
+    this.ensureData();
+    const index = this.overtimeEntries.findIndex(o => o.id === overtimeId);
+    if (index !== -1) {
+      this.overtimeEntries[index] = {
+        ...this.overtimeEntries[index],
+        status: 'REJECTED',
+        approvedBy: rejectedBy,
+        approvedAt: new Date().toISOString()
+      };
+      this.cache();
+      this.persistRows('overtime', [this.overtimeEntries[index]], ['id']);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('hrms-data-refreshed'));
+      }
     }
   }
 
@@ -1143,6 +1336,7 @@ class DataService {
     this.payroll.push(newEntry);
     this.cache();
     this.persistRows('payroll', [newEntry], ['id']);
+    this.notifyPayrollChanged();
     return newEntry;
   }
 
@@ -1153,7 +1347,14 @@ class DataService {
     this.payroll[index] = { ...this.payroll[index], ...updates };
     this.cache();
     this.persistRows('payroll', [this.payroll[index]], ['id']);
+    this.notifyPayrollChanged();
     return this.payroll[index];
+  }
+
+  private notifyPayrollChanged() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-payroll-updated'));
+    }
   }
 
   getLeaveRequests(employeeId?: string, status?: string): LeaveRequest[] {

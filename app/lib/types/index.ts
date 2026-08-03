@@ -269,6 +269,7 @@ export interface EmployeeAssignment {
 }
 
 export type ChangeRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ChangeRequestAction = 'CREATE' | 'UPDATE' | 'TERMINATE' | 'TRANSFER';
 
 export interface EmployeeChangeRequest {
   id: string;
@@ -279,6 +280,7 @@ export interface EmployeeChangeRequest {
   requestedByName: string;
   changes: Partial<Employee>;
   status: ChangeRequestStatus;
+  action?: ChangeRequestAction;
   createdAt: string;
   reviewedBy?: string;
   reviewedByName?: string;
