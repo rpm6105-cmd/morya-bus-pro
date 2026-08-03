@@ -39,6 +39,20 @@ export default function DocumentsPage() {
     year: selectedYear,
   }) : null;
 
+  const numberToWords = (num: number): string => {
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+      'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    
+    if (num === 0) return 'Zero';
+    if (num < 20) return ones[num];
+    if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '');
+    if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + numberToWords(num % 100) : '');
+    if (num < 100000) return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '');
+    if (num < 10000000) return numberToWords(Math.floor(num / 100000)) + ' Lakh' + (num % 100000 ? ' ' + numberToWords(num % 100000) : '');
+    return numberToWords(Math.floor(num / 10000000)) + ' Crore' + (num % 10000000 ? ' ' + numberToWords(num % 10000000) : '');
+  };
+
   const downloadPDF = async () => {
     if (!docRef.current) return;
     setIsGenerating(true);
@@ -140,18 +154,35 @@ export default function DocumentsPage() {
                color: '#1e293b'
              }}
            >
-              {/* Letterhead Header */}
-              <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '1.5rem', marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                 <div>
-                    <h1 style={{ color: '#0f172a', fontSize: '2rem', marginBottom: '0.25rem' }}>MORYA BUS DEPOT</h1>
-                    <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--accent)' }}>PREMIUM TRANSPORTATION SERVICES</p>
+               {/* Letterhead Header */}
+               {docType === 'PAYSLIP' ? (
+                 <div style={{ background: '#0F4C81', color: '#fff', borderRadius: '8px', padding: '1.25rem 1.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                     <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#fff', color: '#0F4C81', fontWeight: 700, fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>MB</div>
+                     <div>
+                       <div style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '0.5px' }}>MORYA BUS SERVICES</div>
+                       <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>{branch ? `${branch.name}, ${branch.city}, ${branch.state}` : 'Morya Bus Services'}</div>
+                       <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>www.moryabuses.com</div>
+                     </div>
+                   </div>
+                   <div style={{ textAlign: 'right' }}>
+                     <div style={{ fontSize: '1.9rem', fontWeight: 700, letterSpacing: '1px' }}>PAY SLIP</div>
+                     <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>Salary Month : {format(new Date(selectedYear, selectedMonth), 'MMMM yyyy')}</div>
+                   </div>
                  </div>
-                 <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    <p style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}><Building2 size={12} /> Depot Road, Mumbai, MH</p>
-                    <p style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}><Phone size={12} /> +91 98765 43210</p>
-                    <p style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}><Globe size={12} /> www.moryabus.com</p>
+               ) : (
+                 <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '1.5rem', marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                   <div>
+                     <h1 style={{ color: '#0f172a', fontSize: '2rem', marginBottom: '0.25rem' }}>MORYA BUS DEPOT</h1>
+                     <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--accent)' }}>PREMIUM TRANSPORTATION SERVICES</p>
+                   </div>
+                   <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                     <p style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}><Building2 size={12} /> Depot Road, Mumbai, MH</p>
+                     <p style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}><Phone size={12} /> +91 98765 43210</p>
+                     <p style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}><Globe size={12} /> www.moryabus.com</p>
+                   </div>
                  </div>
-              </div>
+               )}
 
               {/* Document Content */}
               {selectedEmployee && branch ? (
@@ -161,105 +192,110 @@ export default function DocumentsPage() {
                      <p><strong>Date:</strong> {format(new Date(), 'do MMMM yyyy')}</p>
                   </div>
 
-                  <h2 style={{ textAlign: 'center', textDecoration: 'underline', marginBottom: '2.5rem', color: '#0f172a' }}>
-                    {docType === 'PAYSLIP' ? `SALARY SLIP - ${format(new Date(selectedYear, selectedMonth), 'MMMM yyyy')}` : docType.replace('_', ' ')}
-                  </h2>
+                  {docType !== 'PAYSLIP' && (
+                    <h2 style={{ textAlign: 'center', textDecoration: 'underline', marginBottom: '2.5rem', color: '#0f172a' }}>
+                      {docType.replace('_', ' ')}
+                    </h2>
+                  )}
 
                   {docType === 'PAYSLIP' && payroll ? (
-                    <div style={{ fontSize: '0.9rem' }}>
-                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2rem', marginBottom: '2rem' }}>
-                          <div style={{ border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '8px' }}>
-                             <p style={{ fontWeight: 700, borderBottom: '1px solid #e2e8f0', marginBottom: '0.5rem' }}>EMPLOYEE DETAILS</p>
-                             <p>Name: {selectedEmployee.name}</p>
-                             <p>Employee ID: {selectedEmployee.id}</p>
-                             <p>Department: {selectedEmployee.department}</p>
-                             <p>Depot: {branch.name}</p>
-                          </div>
-                          <div style={{ border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '8px' }}>
-                             <p style={{ fontWeight: 700, borderBottom: '1px solid #e2e8f0', marginBottom: '0.5rem' }}>PAYROLL INFO</p>
-                             <p>Bank: Morya Corporate Bank</p>
-                             <p>Month: {format(new Date(selectedYear, selectedMonth), 'MMMM')}</p>
-                             <p>Year: {selectedYear}</p>
-                             <p>Status: Disbursed</p>
-                          </div>
-                       </div>
-
-                       <table style={{ border: '1px solid #0f172a', marginBottom: '1.5rem' }}>
-                          <thead style={{ background: '#f8fafc' }}>
-                             <tr>
-                                <th style={{ color: '#0f172a' }}>Earnings</th>
-                                <th style={{ color: '#0f172a' }}>Amount</th>
-                                <th style={{ color: '#0f172a' }}>Deductions</th>
-                                <th style={{ color: '#0f172a' }}>Amount</th>
-                             </tr>
-                          </thead>
+                    <div style={{ fontSize: '0.85rem' }}>
+                       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.25rem' }}>
                           <tbody>
                              <tr>
-                                <td>Basic Salary</td>
-                                <td>₹{payroll.earnedBasic.toLocaleString()}</td>
-                                <td>Provident Fund (PF)</td>
-                                <td>₹{payroll.pfDeduction.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb', width: '25%' }}>Employee Name</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb', width: '25%' }}>{selectedEmployee.name}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb', width: '25%' }}>Employee ID</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb', width: '25%' }}>{selectedEmployee.id}</td>
                              </tr>
                              <tr>
-                                <td>HRA</td>
-                                <td>₹{payroll.earnedHra.toLocaleString()}</td>
-                                <td>ESIC</td>
-                                <td>₹{payroll.esicDeduction.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>Department</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{selectedEmployee.department}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>Designation</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{selectedEmployee.designation}</td>
                              </tr>
                              <tr>
-                                <td>Conveyance</td>
-                                <td>₹{payroll.earnedConveyance.toLocaleString()}</td>
-                                <td>TDS</td>
-                                <td>₹{payroll.tdsDeduction.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>Date of Joining</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{format(new Date(`${selectedEmployee.joiningDate}T00:00:00`), 'dd-MMM-yyyy')}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>Pay Date</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{format(new Date(selectedYear, selectedMonth + 1, 0), 'dd-MMM-yyyy')}</td>
                              </tr>
                              <tr>
-                                <td>Other Allowances</td>
-                                <td>₹{payroll.earnedAllowances.toLocaleString()}</td>
-                                <td>Professional Tax (PT)</td>
-                                <td>₹{payroll.ptDeduction.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>Bank</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{selectedEmployee.bankName || 'N/A'}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>Account No.</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{selectedEmployee.bankAccount && selectedEmployee.bankAccount.length > 4 ? `XXXXXX${selectedEmployee.bankAccount.slice(-4)}` : (selectedEmployee.bankAccount || 'N/A')}</td>
                              </tr>
                              <tr>
-                                <td>Overtime ({payroll.overtimeHours}h / {payroll.overtimeDays}d)</td>
-                                <td>₹{payroll.overtimeAmount.toLocaleString()}</td>
-                                <td>Loss of Pay (LOP)</td>
-                                <td>₹{payroll.lopDeduction.toLocaleString()}</td>
-                             </tr>
-                             <tr>
-                                <td>Incentive</td>
-                                <td>₹{payroll.incentive.toLocaleString()}</td>
-                                <td>Driver Incentive</td>
-                                <td>₹{payroll.driverIncentive.toLocaleString()}</td>
-                             </tr>
-                             <tr style={{ fontWeight: 700, borderTop: '2px solid #0f172a' }}>
-                                <td><strong>GROSS EARNINGS</strong></td>
-                                <td><strong>₹{payroll.totalEarnings.toLocaleString()}</strong></td>
-                                <td><strong>TOTAL DEDUCTIONS</strong></td>
-                                <td><strong>₹{payroll.totalDeductions.toLocaleString()}</strong></td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>PAN</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{selectedEmployee.panNumber || 'N/A'}</td>
+                                <td style={{ padding: '0.5rem', background: '#f5f7fb', color: '#64748b', fontWeight: 600, border: '1px solid #dde4eb' }}>UAN</td>
+                                <td style={{ padding: '0.5rem', color: '#1e293b', border: '1px solid #dde4eb' }}>{selectedEmployee.pfUanNumber || 'N/A'}</td>
                              </tr>
                           </tbody>
                        </table>
 
-                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.8rem', textAlign: 'center' }}>
-                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
-                             <p style={{ fontWeight: 700 }}>Present Days</p>
-                             <p>{payroll.presentDays} / {payroll.daysInMonth}</p>
-                          </div>
-                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
-                             <p style={{ fontWeight: 700 }}>Absent / LOP</p>
-                             <p>{payroll.absentDays} / {payroll.lopDays}</p>
-                          </div>
-                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
-                             <p style={{ fontWeight: 700 }}>Paid / Holiday / Week Off</p>
-                             <p>{payroll.paidLeaveDays} / {payroll.holidayDays} / {payroll.weekOffDays}</p>
-                          </div>
-                       </div>
+                       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.25rem' }}>
+                          <thead>
+                             <tr>
+                                <th style={{ padding: '0.6rem', textAlign: 'left', background: '#f5f7fb', color: '#0f172a', fontWeight: 600, border: '1px solid #dde4eb' }}>Earnings</th>
+                                <th style={{ padding: '0.6rem', textAlign: 'left', background: '#f5f7fb', color: '#0f172a', fontWeight: 600, border: '1px solid #dde4eb' }}>Amount</th>
+                                <th style={{ padding: '0.6rem', textAlign: 'left', background: '#f5f7fb', color: '#0f172a', fontWeight: 600, border: '1px solid #dde4eb' }}>Deductions</th>
+                                <th style={{ padding: '0.6rem', textAlign: 'left', background: '#f5f7fb', color: '#0f172a', fontWeight: 600, border: '1px solid #dde4eb' }}>Amount</th>
+                             </tr>
+                          </thead>
+                          <tbody>
+                             <tr>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>Basic Salary</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>₹{payroll.earnedBasic.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.pfDeduction > 0 ? 'Provident Fund' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.pfDeduction > 0 ? `₹${payroll.pfDeduction.toLocaleString()}` : ''}</td>
+                             </tr>
+                             <tr>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>House Rent Allowance</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>₹{payroll.earnedHra.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.ptDeduction > 0 ? 'Professional Tax' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.ptDeduction > 0 ? `₹${payroll.ptDeduction.toLocaleString()}` : ''}</td>
+                             </tr>
+                             <tr>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>Conveyance Allowance</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>₹{payroll.earnedConveyance.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.esicDeduction > 0 ? 'ESIC' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.esicDeduction > 0 ? `₹${payroll.esicDeduction.toLocaleString()}` : ''}</td>
+                             </tr>
+                             <tr>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>Other Allowances</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>₹{payroll.earnedAllowances.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.tdsDeduction > 0 ? 'Income Tax' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.tdsDeduction > 0 ? `₹${payroll.tdsDeduction.toLocaleString()}` : ''}</td>
+                             </tr>
+                             <tr>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.overtimeAmount > 0 ? `Overtime (${payroll.overtimeHours}h / ${payroll.overtimeDays}d)` : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.overtimeAmount > 0 ? `₹${payroll.overtimeAmount.toLocaleString()}` : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.lopDeduction > 0 ? 'LOP Deduction' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.lopDeduction > 0 ? `₹${payroll.lopDeduction.toLocaleString()}` : ''}</td>
+                             </tr>
+                             <tr>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.incentive > 0 ? 'Incentive' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.incentive > 0 ? `₹${payroll.incentive.toLocaleString()}` : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb' }}>{payroll.driverIncentive > 0 ? 'Driver Incentive' : ''}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right' }}>{payroll.driverIncentive > 0 ? `₹${payroll.driverIncentive.toLocaleString()}` : ''}</td>
+                             </tr>
+                             <tr style={{ background: '#fafafa' }}>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', fontWeight: 700 }}>Gross Earnings</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right', fontWeight: 700 }}>₹{payroll.totalEarnings.toLocaleString()}</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', fontWeight: 700 }}>Total Deductions</td>
+                                <td style={{ padding: '0.5rem', border: '1px solid #dde4eb', textAlign: 'right', fontWeight: 700 }}>₹{payroll.totalDeductions.toLocaleString()}</td>
+                             </tr>
+                          </tbody>
+                       </table>
 
-                       <div style={{ background: '#ecfdf5', borderLeft: '5px solid #10b981', padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                       <div style={{ background: '#0F4C81', color: '#fff', borderRadius: '6px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                           <div>
-                             <h3 style={{ color: '#065f46', fontSize: '1rem' }}>NET SALARY PAYABLE</h3>
-                             <p style={{ fontSize: '0.75rem', color: '#065f46' }}>Disbursed via Direct Bank Transfer</p>
+                             <div style={{ fontSize: '1rem', fontWeight: 700 }}>NET PAY</div>
+                             <div style={{ fontSize: '0.75rem', opacity: 0.95, marginTop: '2px' }}>Rupees {numberToWords(payroll.netSalary)} Only</div>
                           </div>
-                          <h2 style={{ color: '#065f46', fontSize: '2.25rem' }}>₹{payroll.netSalary.toLocaleString()}</h2>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>₹{payroll.netSalary.toLocaleString()}</div>
                        </div>
                     </div>
                   ) : (
@@ -282,23 +318,36 @@ export default function DocumentsPage() {
                   )}
 
                   {/* Signature Section */}
-                  <div style={{ marginTop: '5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                     <div>
-                        <p style={{ fontSize: '1.25rem', fontFamily: 'serif', fontStyle: 'italic', marginBottom: '0.25rem' }}>Rajesh More</p>
-                        <div style={{ width: '150px', height: '1px', background: '#0f172a', marginBottom: '0.5rem' }} />
-                        <p style={{ fontWeight: 700, fontSize: '0.85rem' }}>HR MANAGER</p>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Morya Bus Depot Operations Hub</p>
-                     </div>
-                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ width: '100px', height: '100px', border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: '#cbd5e1', marginBottom: '0.5rem' }}>
-                           COMPANY STAMP
-                        </div>
-                        <p style={{ fontSize: '0.7rem', fontWeight: 600 }}>AUTHORIZED SEAL</p>
-                     </div>
-                  </div>
+                  {docType === 'PAYSLIP' ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '3rem', fontSize: '0.8rem', color: '#475569' }}>
+                       <div style={{ textAlign: 'center', width: '180px' }}>
+                          <div style={{ borderTop: '1px solid #334155', marginBottom: '0.5rem', height: '2.5rem' }} />
+                          Employer Signature
+                       </div>
+                       <div style={{ textAlign: 'center', width: '180px' }}>
+                          <div style={{ borderTop: '1px solid #334155', marginBottom: '0.5rem', height: '2.5rem' }} />
+                          Employee Signature
+                       </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                       <div>
+                          <p style={{ fontSize: '1.25rem', fontFamily: 'serif', fontStyle: 'italic', marginBottom: '0.25rem' }}>Rajesh More</p>
+                          <div style={{ width: '150px', height: '1px', background: '#0f172a', marginBottom: '0.5rem' }} />
+                          <p style={{ fontWeight: 700, fontSize: '0.85rem' }}>HR MANAGER</p>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Morya Bus Depot Operations Hub</p>
+                       </div>
+                       <div style={{ textAlign: 'center' }}>
+                          <div style={{ width: '100px', height: '100px', border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: '#cbd5e1', marginBottom: '0.5rem' }}>
+                             COMPANY STAMP
+                          </div>
+                          <p style={{ fontSize: '0.7rem', fontWeight: 600 }}>AUTHORIZED SEAL</p>
+                       </div>
+                    </div>
+                  )}
 
                   <p style={{ position: 'absolute', bottom: '2.5rem', left: '2.5rem', right: '2.5rem', textAlign: 'center', fontSize: '0.75rem', color: '#cbd5e1', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                    This is a computer-generated document and is legally binding as per the terms of employment at Morya Bus Depot.
+                    {docType === 'PAYSLIP' ? 'This is a computer-generated payslip and does not require a physical signature.' : 'This is a computer-generated document and is legally binding as per the terms of employment at Morya Bus Depot.'}
                   </p>
                 </>
               ) : (

@@ -162,229 +162,178 @@ export default function PayrollPage() {
     const calc = getCalcForEntry(entry);
     if (!calc) return;
 
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    doc.setFillColor(16, 185, 129);
-    doc.rect(0, 0, pageWidth, 45, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(28);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MORYA BUS SERVICES', pageWidth / 2, 20, { align: 'center' });
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'normal');
-    doc.text('HRMS Pro - Salary Slip', pageWidth / 2, 32, { align: 'center' });
-    
-    doc.setFillColor(249, 250, 251);
-    doc.rect(0, 45, pageWidth, 25, 'F');
-    
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(10);
-    doc.text(`Pay Period: ${selectedMonth} ${selectedYear}`, 15, 55);
-    doc.text(`Processed: ${new Date().toLocaleDateString()}`, pageWidth - 15, 55, { align: 'right' });
-    doc.text(`Doc No: MBS/${selectedYear}/${entry.id?.slice(-6).toUpperCase() || '000000'}`, 15, 63);
-    doc.text(`Status: ${entry.status}`, pageWidth - 15, 63, { align: 'right' });
-    
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    const M = 15;
+    const innerW = W - M * 2;
+
+    const NAVY: [number, number, number] = [15, 76, 129];
+    const LIGHT: [number, number, number] = [245, 247, 251];
+    const DARK: [number, number, number] = [31, 41, 55];
+    const GRAY: [number, number, number] = [100, 116, 139];
+    const BORDER: [number, number, number] = [221, 228, 235];
+
+    const fmtDate = (d?: string) => {
+      if (!d) return 'N/A';
+      const dt = new Date(d.length === 10 ? `${d}T00:00:00` : d);
+      if (isNaN(dt.getTime())) return 'N/A';
+      const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()];
+      return `${String(dt.getDate()).padStart(2, '0')}-${mon}-${dt.getFullYear()}`;
+    };
+    const maskAccount = (acct?: string) => (acct && acct.length > 4 ? `XXXXXX${acct.slice(-4)}` : (acct || 'N/A'));
+
+    const payDate = new Date(selectedYear, monthIndex, 0);
+    const payDateStr = fmtDate(`${payDate.getFullYear()}-${String(payDate.getMonth() + 1).padStart(2, '0')}-${String(payDate.getDate()).padStart(2, '0')}`);
+
+    const drawCell = (x: number, y: number, w: number, h: number, text: string, opts: { bold?: boolean; align?: 'left' | 'center' | 'right'; color?: [number, number, number]; size?: number; bg?: [number, number, number] } = {}) => {
+      if (opts.bg) {
+        doc.setFillColor(...opts.bg);
+        doc.rect(x, y, w, h, 'F');
+      }
+      doc.setDrawColor(...BORDER);
+      doc.rect(x, y, w, h, 'S');
+      doc.setTextColor(...(opts.color || DARK));
+      doc.setFontSize(opts.size || 9);
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.text(text, opts.align === 'right' ? x + w - 5 : x + 5, y + h / 2 + 1.5, { align: opts.align || 'left' });
+    };
+
+    // Header band
+    doc.setFillColor(...NAVY);
+    doc.rect(0, 0, W, 42, 'F');
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(10, 75, pageWidth - 20, 50, 3, 3, 'F');
-    
-    doc.setTextColor(31, 41, 55);
-    doc.setFontSize(11);
+    doc.circle(M + 9, 17, 9, 'F');
+    doc.setTextColor(...NAVY);
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    
-    const col1X = 15;
-    const col2X = 110;
-    
-    doc.text('EMPLOYEE DETAILS', col1X, 85);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    
-    doc.text('Name:', col1X, 95);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.name, col1X + 25, 95);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text('Employee ID:', col1X, 102);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.employeeId, col1X + 30, 102);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text('Department:', col1X, 109);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${emp.department} (${emp.subDepotCategory}${emp.busCategory ? `, ${emp.busCategory === '8 METER' ? '8M' : '12M'} Bus` : ''})`, col1X + 30, 109);
-    
-    doc.text('Designation:', col1X, 116);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.designation, col1X + 30, 116);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text('Bank A/C:', col2X, 95);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.bankAccount, col2X + 25, 95);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text('IFSC:', col2X, 102);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.ifscCode, col2X + 25, 102);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text('UAN:', col2X, 109);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.pfUanNumber || 'N/A', col2X + 25, 109);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text('ESIC:', col2X, 116);
-    doc.setFont('helvetica', 'bold');
-    doc.text(emp.esicNumber || 'N/A', col2X + 25, 116);
-    
-    doc.setFillColor(241, 245, 249);
-    doc.roundedRect(10, 130, pageWidth - 20, 80, 3, 3, 'F');
-    
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ATTENDANCE & EARNINGS', 15, 138);
-    
-    const attendanceData = [
-      ['Present Days', calc.presentDays.toString()],
-      ['Paid Leave', calc.paidLeaveDays.toString()],
-      ['Holidays', calc.holidayDays.toString()],
-      ['Week Off', calc.weekOffDays.toString()],
-      ['Absent/LOP', `${calc.absentDays}/${calc.lopDays}`],
-    ];
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    let yPos = 148;
-    attendanceData.forEach(([label, value]) => {
-      doc.text(label + ':', 15, yPos);
-      doc.setFont('helvetica', 'bold');
-      doc.text(value, 45, yPos);
-      doc.setFont('helvetica', 'normal');
-      yPos += 7;
-    });
-    
-    doc.setDrawColor(200, 200, 200);
-    doc.line(75, 138, 75, 205);
-    
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('EARNINGS BREAKUP', 80, 138);
-    
-    const earningsData = [
-      ['Basic Salary', calc.earnedBasic],
-      ['HRA', calc.earnedHra],
-      ['Conveyance', calc.earnedConveyance],
-      ['Other Allowances', calc.earnedAllowances],
-      ['Gross Salary', calc.earnedGross],
-    ];
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    yPos = 148;
-    earningsData.forEach(([label, value]) => {
-      const isBold = label === 'Gross Salary';
-      if (isBold) doc.setFont('helvetica', 'bold');
-      doc.text(label + ':', 80, yPos);
-      doc.text(`₹${Number(value).toLocaleString()}`, 140, yPos);
-      if (isBold) doc.setFont('helvetica', 'normal');
-      yPos += 7;
-    });
-    
-    doc.setDrawColor(200, 200, 200);
-    doc.line(150, 138, 150, 205);
-    
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('BONUS & INCENTIVES', 155, 138);
-    
-    const bonusData: [string, number][] = [];
-    if (calc.incentive > 0) bonusData.push(['Incentive', calc.incentive]);
-    if (calc.driverIncentive > 0) bonusData.push(['Driver Incentive', calc.driverIncentive]);
-    if (calc.overtimeAmount > 0) bonusData.push([`OT (${calc.overtimeHours}h / ${calc.overtimeDays}d)`, calc.overtimeAmount]);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    yPos = 148;
-    bonusData.forEach(([label, value]) => {
-      doc.text(label + ':', 155, yPos);
-      doc.setTextColor(16, 185, 129);
-      doc.text(`₹${Number(value).toLocaleString()}`, pageWidth - 15, yPos, { align: 'right' });
-      doc.setTextColor(100, 116, 139);
-      yPos += 7;
-    });
-    const bonusBottom = yPos;
-    
-    const deductionsData: [string, number][] = [
-      ['PF Deduction (12%)', calc.pfDeduction],
-      ['ESIC Deduction (0.75%)', calc.esicDeduction],
-    ];
-    if (calc.tdsDeduction > 0) deductionsData.push(['TDS Deduction', calc.tdsDeduction]);
-    if (calc.ptDeduction > 0) deductionsData.push(['PT Deduction', calc.ptDeduction]);
-    if (calc.lopDeduction > 0) deductionsData.push(['LOP Deduction', calc.lopDeduction]);
-    
-    const boxTop = Math.max(215, Math.max(bonusBottom + 20, 215));
-    const boxHeight = 15 + deductionsData.length * 7 + 7;
-    
-    doc.setFillColor(255, 251, 235);
-    doc.roundedRect(10, boxTop, pageWidth - 20, boxHeight, 3, 3, 'F');
-    
-    doc.setTextColor(31, 41, 55);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DEDUCTIONS', 15, boxTop + 8);
-    
-    doc.setFont('helvetica', 'normal');
-    yPos = boxTop + 17;
-    deductionsData.forEach(([label, value]) => {
-      doc.text(label + ':', 15, yPos);
-      doc.setTextColor(239, 68, 68);
-      doc.text(`-₹${Number(value).toLocaleString()}`, 70, yPos);
-      doc.setTextColor(31, 41, 55);
-      yPos += 7;
-    });
-    
-    doc.text('Total Deductions:', 15, yPos);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(239, 68, 68);
-    doc.text(`-₹${calc.totalDeductions.toLocaleString()}`, 70, yPos);
-    
-    doc.setTextColor(31, 41, 55);
-    doc.text('Total Earnings:', 155, yPos);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
-    doc.text(`₹${calc.totalEarnings.toLocaleString()}`, pageWidth - 15, yPos, { align: 'right' });
-    
-    const netTop = boxTop + boxHeight + 10;
-    doc.setFillColor(16, 185, 129);
-    doc.roundedRect(10, netTop, pageWidth - 20, 30, 3, 3, 'F');
-    
+    doc.text('MB', M + 9, 20, { align: 'center' });
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(12);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('NET PAY', 15, netTop + 13);
-    
-    doc.setFontSize(20);
-    const netSalaryText = `₹${calc.netSalary.toLocaleString()}`;
-    doc.text(netSalaryText, pageWidth - 15, netTop + 15, { align: 'right' });
-    
+    doc.text('MORYA BUS SERVICES', M + 23, 14);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    const netWords = numberToWords(calc.netSalary);
-    doc.text(`Rupees: ${netWords} Only`, 15, netTop + 23);
-    
-    const footerTop = netTop + 36;
-    doc.setFillColor(249, 250, 251);
-    doc.rect(0, footerTop, pageWidth, 60, 'F');
-    
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7);
-    doc.text('Authorised Signatory', pageWidth / 2, footerTop + 20, { align: 'center' });
-    doc.text('This is a computer-generated document. No signature required.', pageWidth / 2, footerTop + 30, { align: 'center' });
-    doc.text('Morya Bus Services - HRMS Pro | www.moryabuses.com', pageWidth / 2, footerTop + 40, { align: 'center' });
+    doc.text(branch ? `${branch.name}, ${branch.city}, ${branch.state}` : 'Morya Bus Services', M + 23, 21);
+    doc.text('www.moryabuses.com', M + 23, 27);
+    doc.setFontSize(26);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PAY SLIP', W - M, 17, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Salary Month : ${selectedMonth} ${selectedYear}`, W - M, 25, { align: 'right' });
+
+    // Employee details grid
+    const details: [string, string, string, string][] = [
+      ['Employee Name', emp.name, 'Employee ID', emp.employeeId],
+      ['Department', emp.department, 'Designation', emp.designation],
+      ['Date of Joining', fmtDate(emp.joiningDate), 'Pay Date', payDateStr],
+      ['Bank', emp.bankName || 'N/A', 'Account No.', maskAccount(emp.bankAccount)],
+      ['PAN', emp.panNumber || 'N/A', 'UAN', emp.pfUanNumber || 'N/A'],
+    ];
+    const cellH = 10;
+    let y = 50;
+    const col1LabelX = M, col1LabelW = 32, col1ValueW = 58, col2LabelW = 32, col2ValueW = 58;
+    details.forEach(([l1, v1, l2, v2]) => {
+      drawCell(col1LabelX, y, col1LabelW, cellH, l1, { bold: true, color: GRAY, bg: LIGHT });
+      drawCell(col1LabelX + col1LabelW, y, col1ValueW, cellH, v1);
+      drawCell(col1LabelX + col1LabelW + col1ValueW, y, col2LabelW, cellH, l2, { bold: true, color: GRAY, bg: LIGHT });
+      drawCell(col1LabelX + col1LabelW + col1ValueW + col2LabelW, y, col2ValueW, cellH, v2);
+      y += cellH;
+    });
+    y += 6;
+
+    // Earnings vs Deductions table
+    const earningsData: [string, number][] = [
+      ['Basic Salary', calc.earnedBasic],
+      ['House Rent Allowance', calc.earnedHra],
+      ['Conveyance Allowance', calc.earnedConveyance],
+      ['Other Allowances', calc.earnedAllowances],
+    ];
+    if (calc.incentive > 0) earningsData.push(['Incentive', calc.incentive]);
+    if (calc.driverIncentive > 0) earningsData.push(['Driver Incentive', calc.driverIncentive]);
+    if (calc.overtimeAmount > 0) earningsData.push([`Overtime (${calc.overtimeHours}h/${calc.overtimeDays}d)`, calc.overtimeAmount]);
+
+    const deductionsData: [string, number][] = [];
+    if (calc.pfDeduction > 0) deductionsData.push(['Provident Fund', calc.pfDeduction]);
+    if (calc.ptDeduction > 0) deductionsData.push(['Professional Tax', calc.ptDeduction]);
+    if (calc.esicDeduction > 0) deductionsData.push(['ESIC', calc.esicDeduction]);
+    if (calc.tdsDeduction > 0) deductionsData.push(['Income Tax', calc.tdsDeduction]);
+    if (calc.lopDeduction > 0) deductionsData.push(['LOP Deduction', calc.lopDeduction]);
+    if (calc.otherDeductions > 0) deductionsData.push(['Other Deductions', calc.otherDeductions]);
+
+    const rowCount = Math.max(earningsData.length, deductionsData.length);
+    const rowH = 9;
+
+    const eLabelW = 58, eValueW = 32, dLabelW = 58, dValueW = 32;
+    drawCell(M, y, eLabelW, rowH + 3, 'Earnings', { bold: true, size: 10, bg: LIGHT });
+    drawCell(M + eLabelW, y, eValueW, rowH + 3, 'Amount', { bold: true, size: 10, bg: LIGHT, align: 'right' });
+    drawCell(M + eLabelW + eValueW, y, dLabelW, rowH + 3, 'Deductions', { bold: true, size: 10, bg: LIGHT });
+    drawCell(M + eLabelW + eValueW + dLabelW, y, dValueW, rowH + 3, 'Amount', { bold: true, size: 10, bg: LIGHT, align: 'right' });
+    y += rowH + 3;
+
+    for (let i = 0; i < rowCount; i++) {
+      if (i < earningsData.length) {
+        const [label, value] = earningsData[i];
+        drawCell(M, y, eLabelW, rowH, label);
+        drawCell(M + eLabelW, y, eValueW, rowH, `₹${Number(value).toLocaleString()}`, { align: 'right' });
+      } else {
+        drawCell(M, y, eLabelW, rowH, '');
+        drawCell(M + eLabelW, y, eValueW, rowH, '');
+      }
+      if (i < deductionsData.length) {
+        const [label, value] = deductionsData[i];
+        drawCell(M + eLabelW + eValueW, y, dLabelW, rowH, label);
+        drawCell(M + eLabelW + eValueW + dLabelW, y, dValueW, rowH, `₹${Number(value).toLocaleString()}`, { align: 'right' });
+      } else {
+        drawCell(M + eLabelW + eValueW, y, dLabelW, rowH, '');
+        drawCell(M + eLabelW + eValueW + dLabelW, y, dValueW, rowH, '');
+      }
+      y += rowH;
+    }
+
+    const footBg: [number, number, number] = [250, 250, 250];
+    drawCell(M, y, eLabelW, rowH, 'Gross Earnings', { bold: true, bg: footBg });
+    drawCell(M + eLabelW, y, eValueW, rowH, `₹${calc.totalEarnings.toLocaleString()}`, { bold: true, bg: footBg, align: 'right' });
+    drawCell(M + eLabelW + eValueW, y, dLabelW, rowH, 'Total Deductions', { bold: true, bg: footBg });
+    drawCell(M + eLabelW + eValueW + dLabelW, y, dValueW, rowH, `₹${calc.totalDeductions.toLocaleString()}`, { bold: true, bg: footBg, align: 'right' });
+    y += rowH + 12;
+
+    // Net pay bar
+    doc.setFillColor(...NAVY);
+    doc.roundedRect(M, y, innerW, 26, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('NET PAY', M + 10, y + 11);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Rupees ${numberToWords(calc.netSalary)} Only`, M + 10, y + 19);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`₹${calc.netSalary.toLocaleString()}`, W - M - 10, y + 15, { align: 'right' });
+    y += 26 + 22;
+
+    // Signatures
+    doc.setDrawColor(...DARK);
+    doc.setLineWidth(0.4);
+    doc.line(W / 2 - 55, y + 12, W / 2 - 5, y + 12);
+    doc.line(W / 2 + 5, y + 12, W / 2 + 55, y + 12);
+    doc.setLineWidth(0.2);
+    doc.setTextColor(...GRAY);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Employer Signature', W / 2 - 30, y + 20, { align: 'center' });
+    doc.text('Employee Signature', W / 2 + 30, y + 20, { align: 'center' });
+
+    // Footer
+    const footerY = y + 34;
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(M, footerY, W - M, footerY);
+    doc.setTextColor(...GRAY);
+    doc.setFontSize(8);
+    doc.text('This is a computer-generated payslip and does not require a physical signature.', W / 2, footerY + 6, { align: 'center' });
+    doc.text('Morya Bus Services - HRMS Pro | www.moryabuses.com', W / 2, footerY + 12, { align: 'center' });
 
     doc.save(`Payslip_${emp.employeeId}_${selectedMonth}_${selectedYear}.pdf`);
     toast.success('Payslip generated');
@@ -656,74 +605,145 @@ export default function PayrollPage() {
       {showPayslip && selectedEntry && (() => {
         const previewCalc = getCalcForEntry(selectedEntry);
         if (!previewCalc) return null;
+        const previewEmp = employees.find(e => e.id === selectedEntry.employeeId);
+        const previewBranch = dataService.getBranchById(previewEmp?.branchId || '');
+        const fmtD = (d?: string) => {
+          if (!d) return 'N/A';
+          const dt = new Date(d.length === 10 ? `${d}T00:00:00` : d);
+          if (isNaN(dt.getTime())) return 'N/A';
+          const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()];
+          return `${String(dt.getDate()).padStart(2, '0')}-${mon}-${dt.getFullYear()}`;
+        };
+        const maskAcct = (a?: string) => (a && a.length > 4 ? `XXXXXX${a.slice(-4)}` : (a || 'N/A'));
+        const pPayDate = new Date(selectedYear, monthIndex, 0);
+        const pPayDateStr = fmtD(`${pPayDate.getFullYear()}-${String(pPayDate.getMonth() + 1).padStart(2, '0')}-${String(pPayDate.getDate()).padStart(2, '0')}`);
+
+        const previewEarnings: [string, number][] = [
+          ['Basic Salary', previewCalc.earnedBasic],
+          ['House Rent Allowance', previewCalc.earnedHra],
+          ['Conveyance Allowance', previewCalc.earnedConveyance],
+          ['Other Allowances', previewCalc.earnedAllowances],
+        ];
+        if (previewCalc.incentive > 0) previewEarnings.push(['Incentive', previewCalc.incentive]);
+        if (previewCalc.driverIncentive > 0) previewEarnings.push(['Driver Incentive', previewCalc.driverIncentive]);
+        if (previewCalc.overtimeAmount > 0) previewEarnings.push([`Overtime (${previewCalc.overtimeHours}h/${previewCalc.overtimeDays}d)`, previewCalc.overtimeAmount]);
+
+        const previewDeductions: [string, number][] = [];
+        if (previewCalc.pfDeduction > 0) previewDeductions.push(['Provident Fund', previewCalc.pfDeduction]);
+        if (previewCalc.ptDeduction > 0) previewDeductions.push(['Professional Tax', previewCalc.ptDeduction]);
+        if (previewCalc.esicDeduction > 0) previewDeductions.push(['ESIC', previewCalc.esicDeduction]);
+        if (previewCalc.tdsDeduction > 0) previewDeductions.push(['Income Tax', previewCalc.tdsDeduction]);
+        if (previewCalc.lopDeduction > 0) previewDeductions.push(['LOP Deduction', previewCalc.lopDeduction]);
+        if (previewCalc.otherDeductions > 0) previewDeductions.push(['Other Deductions', previewCalc.otherDeductions]);
+
+        const previewRowCount = Math.max(previewEarnings.length, previewDeductions.length);
+
         return (
         <div style={styles.modalOverlay} onClick={() => setShowPayslip(false)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...styles.modal, maxWidth: '900px' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2>Payslip Preview</h2>
               <button onClick={() => setShowPayslip(false)} style={styles.closeBtn}>✕</button>
             </div>
             <div style={styles.payslipPreview}>
               <div style={styles.payslipHeader}>
-                <h3>MORYA BUS SERVICES</h3>
-                <p>Salary Slip - {selectedMonth} {selectedYear}</p>
+                <div style={styles.payslipHeaderLeft}>
+                  <div style={styles.payslipLogo}>MB</div>
+                  <div>
+                    <div style={styles.payslipCompany}>MORYA BUS SERVICES</div>
+                    <div style={styles.payslipSub}>{previewBranch ? `${previewBranch.name}, ${previewBranch.city}, ${previewBranch.state}` : 'Morya Bus Services'}</div>
+                    <div style={styles.payslipSub}>www.moryabuses.com</div>
+                  </div>
+                </div>
+                <div style={styles.payslipHeaderRight}>
+                  <div style={styles.payslipTitle}>PAY SLIP</div>
+                  <div style={styles.payslipMonth}>Salary Month : {selectedMonth} {selectedYear}</div>
+                </div>
               </div>
-              <div style={styles.payslipBody}>
-                <div className="payslip-section">
-                  <h4>ATTENDANCE</h4>
-                  <div style={styles.salaryRow}><span>Present Days</span><span>{previewCalc.presentDays}</span></div>
-                  <div style={styles.salaryRow}><span>Paid Leave</span><span>{previewCalc.paidLeaveDays}</span></div>
-                  <div style={styles.salaryRow}><span>Holidays</span><span>{previewCalc.holidayDays}</span></div>
-                  <div style={styles.salaryRow}><span>Week Off</span><span>{previewCalc.weekOffDays}</span></div>
-                  <div style={styles.salaryRow}><span>Absent/LOP</span><span>{previewCalc.absentDays}/{previewCalc.lopDays}</span></div>
+
+              <table style={styles.payslipTable}>
+                <tbody>
+                  <tr>
+                    <td style={styles.psLabel}>Employee Name</td>
+                    <td style={styles.psValue}>{previewEmp?.name || 'N/A'}</td>
+                    <td style={styles.psLabel}>Employee ID</td>
+                    <td style={styles.psValue}>{previewEmp?.employeeId || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style={styles.psLabel}>Department</td>
+                    <td style={styles.psValue}>{previewEmp?.department || 'N/A'}</td>
+                    <td style={styles.psLabel}>Designation</td>
+                    <td style={styles.psValue}>{previewEmp?.designation || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style={styles.psLabel}>Date of Joining</td>
+                    <td style={styles.psValue}>{fmtD(previewEmp?.joiningDate)}</td>
+                    <td style={styles.psLabel}>Pay Date</td>
+                    <td style={styles.psValue}>{pPayDateStr}</td>
+                  </tr>
+                  <tr>
+                    <td style={styles.psLabel}>Bank</td>
+                    <td style={styles.psValue}>{previewEmp?.bankName || 'N/A'}</td>
+                    <td style={styles.psLabel}>Account No.</td>
+                    <td style={styles.psValue}>{maskAcct(previewEmp?.bankAccount)}</td>
+                  </tr>
+                  <tr>
+                    <td style={styles.psLabel}>PAN</td>
+                    <td style={styles.psValue}>{previewEmp?.panNumber || 'N/A'}</td>
+                    <td style={styles.psLabel}>UAN</td>
+                    <td style={styles.psValue}>{previewEmp?.pfUanNumber || 'N/A'}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <table style={styles.payslipTable}>
+                <thead>
+                  <tr>
+                    <th style={styles.psTh}>Earnings</th>
+                    <th style={styles.psTh}>Amount</th>
+                    <th style={styles.psTh}>Deductions</th>
+                    <th style={styles.psTh}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: previewRowCount }).map((_, i) => (
+                    <tr key={i}>
+                      <td style={styles.psTd}>{i < previewEarnings.length ? previewEarnings[i][0] : ''}</td>
+                      <td style={styles.psTdRight}>{i < previewEarnings.length ? `₹${previewEarnings[i][1].toLocaleString()}` : ''}</td>
+                      <td style={styles.psTd}>{i < previewDeductions.length ? previewDeductions[i][0] : ''}</td>
+                      <td style={styles.psTdRight}>{i < previewDeductions.length ? `₹${previewDeductions[i][1].toLocaleString()}` : ''}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={styles.psFoot}>Gross Earnings</td>
+                    <td style={styles.psFootRight}>₹{previewCalc.totalEarnings.toLocaleString()}</td>
+                    <td style={styles.psFoot}>Total Deductions</td>
+                    <td style={styles.psFootRight}>₹{previewCalc.totalDeductions.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style={styles.netPayBar}>
+                <div>
+                  <div style={styles.netPayLabel}>NET PAY</div>
+                  <div style={styles.netPayWords}>Rupees {numberToWords(previewCalc.netSalary)} Only</div>
                 </div>
-                <div className="payslip-section">
-                  <h4>EARNINGS</h4>
-                  <div style={styles.salaryRow}><span>Basic Salary</span><span>₹{previewCalc.earnedBasic.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>HRA</span><span>₹{previewCalc.earnedHra.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>Conveyance</span><span>₹{previewCalc.earnedConveyance.toLocaleString()}</span></div>
-                  <div style={styles.salaryRow}><span>Other Allowances</span><span>₹{previewCalc.earnedAllowances.toLocaleString()}</span></div>
-                  <div style={{ ...styles.salaryRow, fontWeight: 'bold', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
-                    <span>Gross Salary</span><span>₹{previewCalc.earnedGross.toLocaleString()}</span>
-                  </div>
+                <div style={styles.netPayAmt}>₹{previewCalc.netSalary.toLocaleString()}</div>
+              </div>
+
+              <div style={styles.signatures}>
+                <div style={styles.signBox}>
+                  <div style={styles.signLine} />
+                  <span>Employer Signature</span>
                 </div>
-                <div className="payslip-section">
-                  <h4>BONUS & INCENTIVES</h4>
-                  {previewCalc.incentive > 0 && (
-                    <div style={styles.salaryRow}><span>Incentive</span><span style={{ color: '#10b981' }}>₹{previewCalc.incentive.toLocaleString()}</span></div>
-                  )}
-                  {previewCalc.driverIncentive > 0 && (
-                    <div style={styles.salaryRow}><span>Driver Incentive</span><span style={{ color: '#10b981' }}>₹{previewCalc.driverIncentive.toLocaleString()}</span></div>
-                  )}
-                  {previewCalc.overtimeAmount > 0 && (
-                    <div style={styles.salaryRow}><span>Overtime ({previewCalc.overtimeHours}h / {previewCalc.overtimeDays}d)</span><span style={{ color: '#10b981' }}>₹{previewCalc.overtimeAmount.toLocaleString()}</span></div>
-                  )}
+                <div style={styles.signBox}>
+                  <div style={styles.signLine} />
+                  <span>Employee Signature</span>
                 </div>
-                <div className="payslip-section">
-                  <h4>DEDUCTIONS</h4>
-                  {previewCalc.pfDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>PF (12%)</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.pfDeduction.toLocaleString()}</span></div>
-                  )}
-                  {previewCalc.esicDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>ESIC (0.75%)</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.esicDeduction.toLocaleString()}</span></div>
-                  )}
-                  {previewCalc.tdsDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>TDS</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.tdsDeduction.toLocaleString()}</span></div>
-                  )}
-                  {previewCalc.ptDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>PT</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.ptDeduction.toLocaleString()}</span></div>
-                  )}
-                  {previewCalc.lopDeduction > 0 && (
-                    <div style={styles.salaryRow}><span>LOP</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.lopDeduction.toLocaleString()}</span></div>
-                  )}
-                  <div style={{ ...styles.salaryRow, fontWeight: 'bold', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
-                    <span>Total Deductions</span><span style={{ color: '#ef4444' }}>-₹{previewCalc.totalDeductions.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div style={styles.netPaySection}>
-                  <span>NET PAY</span>
-                  <span style={styles.netPayAmount}>₹{previewCalc.netSalary.toLocaleString()}</span>
-                </div>
+              </div>
+
+              <div style={styles.payslipFooter}>
+                This is a computer-generated payslip and does not require a physical signature.
               </div>
             </div>
             <div style={styles.modalFooter}>
@@ -782,12 +802,30 @@ const styles: Record<string, React.CSSProperties> = {
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e2e8f0' },
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' },
   payslipPreview: { padding: '24px' },
-  payslipHeader: { textAlign: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid #0f172a' },
-  payslipBody: {},
-  payslipSection: { marginBottom: '20px' },
-  salaryRow: { display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '14px' },
-  netPaySection: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#f0fdf4', borderRadius: '8px', marginTop: '16px' },
-  netPayAmount: { fontSize: '24px', fontWeight: '700', color: '#10b981' },
+  payslipHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0F4C81', color: '#fff', borderRadius: '8px', padding: '20px 24px', marginBottom: '16px' },
+  payslipHeaderLeft: { display: 'flex', alignItems: 'center', gap: '14px' },
+  payslipLogo: { width: '46px', height: '46px', borderRadius: '50%', background: '#fff', color: '#0F4C81', fontWeight: '700', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  payslipCompany: { fontSize: '20px', fontWeight: '700', letterSpacing: '0.5px' },
+  payslipSub: { fontSize: '12px', opacity: '0.9', marginTop: '2px' },
+  payslipHeaderRight: { textAlign: 'right' },
+  payslipTitle: { fontSize: '30px', fontWeight: '700', letterSpacing: '1px' },
+  payslipMonth: { fontSize: '13px', marginTop: '4px' },
+  payslipTable: { width: '100%', borderCollapse: 'collapse', marginBottom: '16px', fontSize: '13px' },
+  psLabel: { padding: '8px 10px', background: '#f5f7fb', color: '#64748b', fontWeight: '600', border: '1px solid #dde4eb', width: '25%' },
+  psValue: { padding: '8px 10px', color: '#1f2937', border: '1px solid #dde4eb', width: '25%' },
+  psTh: { padding: '10px', textAlign: 'left', background: '#f5f7fb', color: '#0f172a', fontWeight: '600', border: '1px solid #dde4eb', fontSize: '13px' },
+  psTd: { padding: '8px 10px', border: '1px solid #dde4eb', color: '#1f2937' },
+  psTdRight: { padding: '8px 10px', border: '1px solid #dde4eb', textAlign: 'right', color: '#1f2937' },
+  psFoot: { padding: '8px 10px', border: '1px solid #dde4eb', fontWeight: '700', background: '#fafafa', color: '#0f172a' },
+  psFootRight: { padding: '8px 10px', border: '1px solid #dde4eb', fontWeight: '700', textAlign: 'right', background: '#fafafa', color: '#0f172a' },
+  netPayBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0F4C81', color: '#fff', borderRadius: '6px', padding: '16px 20px', margin: '16px 0 24px' },
+  netPayLabel: { fontSize: '16px', fontWeight: '700' },
+  netPayWords: { fontSize: '12px', marginTop: '4px', opacity: '0.95' },
+  netPayAmt: { fontSize: '26px', fontWeight: '700' },
+  signatures: { display: 'flex', justifyContent: 'space-around', padding: '0 20px', marginBottom: '24px' },
+  signBox: { textAlign: 'center', width: '200px', fontSize: '12px', color: '#475569' },
+  signLine: { borderTop: '1px solid #334155', marginBottom: '8px' },
+  payslipFooter: { textAlign: 'center', color: '#94a3b8', fontSize: '11px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' },
   modalFooter: { padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' },
   downloadBtn: { padding: '10px 16px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }
 };
