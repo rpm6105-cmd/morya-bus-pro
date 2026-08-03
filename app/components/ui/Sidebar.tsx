@@ -22,12 +22,13 @@ import {
   Calendar,
   Menu,
   X,
-  ClipboardCheck
+  ClipboardCheck,
+  ChevronLeft
 } from 'lucide-react';
 import { useAuth } from '../../lib/context/AuthContext';
 import { dataService } from '../../lib/services/dataService';
 
-const Sidebar = () => {
+const Sidebar = ({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAdmin, logout } = useAuth();
@@ -136,21 +137,26 @@ const Sidebar = () => {
         className="sidebar-component"
         style={{
           ...styles.sidebar,
-          ...(isMobile ? {
-            transform: isOpen ? 'translateX(0)' : 'translateX(-260px)',
-            zIndex: 1050,
-            transition: 'transform 0.3s ease',
-          } : {}),
+          transform: collapsed && !isMobile ? 'translateX(-260px)' : (isMobile ? (isOpen ? 'translateX(0)' : 'translateX(-260px)') : 'translateX(0)'),
+          zIndex: 1050,
+          transition: 'transform 0.3s ease',
         }}
       >
-        <div style={{ marginBottom: '2.5rem' }}>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Bus size={24} color="#10b981" />
-            HRMS <span style={{ color: '#10b981', fontSize: '0.75rem' }}>PRO</span>
-          </h1>
-          <p style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em', marginTop: '0.25rem' }}>
-            MORYA BUS SERVICES
-          </p>
+        <div style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Bus size={24} color="#10b981" />
+              HRMS <span style={{ color: '#10b981', fontSize: '0.75rem' }}>PRO</span>
+            </h1>
+            <p style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em', marginTop: '0.25rem' }}>
+              MORYA BUS SERVICES
+            </p>
+          </div>
+          {!isMobile && onToggle && (
+            <button onClick={onToggle} title="Collapse sidebar" style={styles.collapseBtn}>
+              <ChevronLeft size={16} color="#94a3b8" />
+            </button>
+          )}
         </div>
 
         <nav style={{ flex: 1, overflowY: 'auto' }}>
@@ -164,13 +170,15 @@ const Sidebar = () => {
                     href={item.path} 
                     style={{
                       ...styles.navLink,
-                      background: isActive ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                      color: isActive ? '#10b981' : '#94a3b8',
-                      fontWeight: isActive ? 600 : 400,
-                      borderLeft: isActive ? '3px solid #10b981' : '3px solid transparent',
+                      background: isActive ? 'linear-gradient(90deg, rgba(16, 185, 129, 0.25), rgba(16, 185, 129, 0.08))' : 'transparent',
+                      color: isActive ? '#ffffff' : '#94a3b8',
+                      fontWeight: isActive ? 700 : 400,
+                      borderLeft: isActive ? '4px solid #10b981' : '4px solid transparent',
+                      boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.05)' : 'none',
+                      textDecoration: 'none',
                     }}
                   >
-                    <Icon size={18} />
+                    <Icon size={18} style={{ color: isActive ? '#10b981' : 'inherit' }} />
                     {item.name}
                     {item.path === '/approvals' && isAdmin && pendingApprovals > 0 && (
                       <span style={{
@@ -314,6 +322,17 @@ const styles: Record<string, React.CSSProperties> = {
   userActions: {
     display: 'flex',
     gap: '0.5rem',
+  },
+  collapseBtn: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '8px',
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoutBtn: {
     flex: 1,

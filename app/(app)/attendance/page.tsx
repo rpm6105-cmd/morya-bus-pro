@@ -11,24 +11,23 @@ import {
   eachDayOfInterval, 
   isToday, 
   addMonths,
-  subMonths,
   getDay,
   getDaysInMonth
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar, Download, Upload, Users, CheckCircle, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Download, Upload, Users, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const ATTENDANCE_OPTIONS: { status: AttendanceStatus; label: string; color: string; bgColor: string }[] = [
-  { status: 'P', label: 'Present', color: '#166534', bgColor: '#dcfce7' },
-  { status: 'A', label: 'Absent/LWP', color: '#991b1b', bgColor: '#fee2e2' },
-  { status: 'PL', label: 'Paid Leave', color: '#1e40af', bgColor: '#dbeafe' },
-  { status: 'H', label: 'Holiday', color: '#7c3aed', bgColor: '#ede9fe' },
-  { status: 'WO', label: 'Week Off', color: '#059669', bgColor: '#a7f3d0' },
-  { status: 'LOP', label: 'Loss of Pay', color: '#dc2626', bgColor: '#fecaca' },
+const ATTENDANCE_OPTIONS: { status: AttendanceStatus; label: string; color: string; bgColor: string; gradient: string }[] = [
+  { status: 'P', label: 'Present', color: '#059669', bgColor: '#ecfdf5', gradient: 'linear-gradient(145deg, #a7f3d0, #d1fae5)' },
+  { status: 'A', label: 'Absent', color: '#dc2626', bgColor: '#fef2f2', gradient: 'linear-gradient(145deg, #fecaca, #fee2e2)' },
+  { status: 'PL', label: 'Paid Leave', color: '#2563eb', bgColor: '#eff6ff', gradient: 'linear-gradient(145deg, #bfdbfe, #dbeafe)' },
+  { status: 'H', label: 'Holiday', color: '#7c3aed', bgColor: '#f5f3ff', gradient: 'linear-gradient(145deg, #ddd6fe, #ede9fe)' },
+  { status: 'WO', label: 'Week Off', color: '#0d9488', bgColor: '#f0fdfa', gradient: 'linear-gradient(145deg, #99f6e4, #ccfbf1)' },
+  { status: 'LOP', label: 'LOP', color: '#e11d48', bgColor: '#fff1f2', gradient: 'linear-gradient(145deg, #fecdd3, #ffe4e6)' },
 ];
 
 export default function AttendancePage() {
-  const { user, isAdmin, canAccessDepot } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -39,6 +38,7 @@ export default function AttendancePage() {
   const [attendance, setAttendance] = useState<Attendance>({});
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<AttendanceStatus>('P');
+  const [hoveredDate, setHoveredDate] = useState('');
 
   useEffect(() => {
     loadData();
@@ -53,7 +53,7 @@ export default function AttendancePage() {
     setEmployees(empList);
 
     const attendanceData = dataService.getAttendance() as Attendance;
-    setAttendance(attendanceData);
+    setAttendance({ ...attendanceData });
   };
 
   const filteredEmployees = useMemo(() => {
@@ -72,7 +72,7 @@ export default function AttendancePage() {
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const totalDays = getDaysInMonth(currentDate);
-  
+
   const startDay = getDay(monthStart);
   const blanks = Array(startDay).fill(null);
 
@@ -94,19 +94,12 @@ export default function AttendancePage() {
     }
   };
 
-  const getStatusOptions = (status: AttendanceStatus | undefined) => {
-    return ATTENDANCE_OPTIONS.map(opt => ({
-      ...opt,
-      selected: opt.status === status
-    }));
-  };
-
   const cycleStatus = (dateStr: string, currentStatus?: AttendanceStatus) => {
     const statuses: AttendanceStatus[] = ['P', 'A', 'LOP'];
     const currentIdx = currentStatus ? statuses.indexOf(currentStatus) : -1;
     const nextIdx = (currentIdx + 1) % statuses.length;
     const newStatus = statuses[nextIdx];
-    
+
     const record: AttendanceRecord = {
       employeeId: selectedEmpId,
       date: dateStr,
@@ -176,9 +169,9 @@ export default function AttendancePage() {
   const summary = calculateMonthlySummary();
 
   const getStatusStyle = (status: AttendanceStatus | undefined) => {
-    if (!status) return { bgColor: '#f8fafc', color: '#64748b' };
+    if (!status) return { bgColor: '#ffffff', color: '#64748b', gradient: 'none' };
     const opt = ATTENDANCE_OPTIONS.find(o => o.status === status);
-    return { bgColor: opt?.bgColor || '#f8fafc', color: opt?.color || '#64748b' };
+    return { bgColor: opt?.bgColor || '#ffffff', color: opt?.color || '#64748b', gradient: opt?.gradient || 'none' };
   };
 
   const exportAttendance = () => {
@@ -208,16 +201,36 @@ export default function AttendancePage() {
     toast.success('Attendance exported');
   };
 
+  const statCards = [
+    { key: 'present', label: 'Present', value: summary.present, color: '#059669', bg: '#ecfdf5', icon: CheckCircle },
+    { key: 'absent', label: 'Absent', value: summary.absent, color: '#dc2626', bg: '#fef2f2', icon: Clock },
+    { key: 'lop', label: 'LOP', value: summary.lop, color: '#e11d48', bg: '#fff1f2', icon: Clock },
+    { key: 'paidLeave', label: 'Paid Leave', value: summary.paidLeave, color: '#2563eb', bg: '#eff6ff', icon: Calendar },
+    { key: 'holiday', label: 'Holiday', value: summary.holiday, color: '#7c3aed', bg: '#f5f3ff', icon: Calendar },
+    { key: 'weekOff', label: 'Week Off', value: summary.weekOff, color: '#0d9488', bg: '#f0fdfa', icon: TrendingUp },
+  ];
+
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+    <div style={styles.container}>
+      <div style={styles.header}>
         <div>
-          <h1 style={{ fontSize: '28px', fontWeight: '600', margin: 0 }}>Attendance Management</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0' }}>
-            Mark daily attendance manually: click a date to cycle Present (P) → Absent (A) → LOP
+          <h1 style={styles.title}>Attendance</h1>
+          <p style={styles.subtitle}>
+            Manual attendance — click a date to cycle Present (P) → Absent (A) → LOP
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={styles.monthNav}>
+            <button onClick={handlePrevMonth} style={styles.monthNavBtn}>
+              <ChevronLeft size={18} color="#475569" />
+            </button>
+            <span style={{ fontWeight: '700', minWidth: '130px', textAlign: 'center', fontSize: '14px', color: '#0f172a' }}>
+              {format(currentDate, 'MMMM yyyy')}
+            </span>
+            <button onClick={handleNextMonth} style={styles.monthNavBtn}>
+              <ChevronRight size={18} color="#475569" />
+            </button>
+          </div>
           <button onClick={() => setShowBulkModal(true)} style={styles.actionBtn}>
             <Upload size={16} />
             Bulk Update
@@ -241,180 +254,173 @@ export default function AttendancePage() {
           <option value="STAFF">Office Staff</option>
           <option value="DRIVERS">Drivers</option>
         </select>
-        <select value={selectedEmpId} onChange={(e) => setSelectedEmpId(e.target.value)} style={{ ...styles.select, minWidth: '250px' }}>
+        <select value={selectedEmpId} onChange={(e) => setSelectedEmpId(e.target.value)} style={{ ...styles.select, minWidth: '260px', flex: 1 }}>
           <option value="">Select Employee</option>
           {filteredEmployees.map(e => (
             <option key={e.id} value={e.id}>{e.employeeId} - {e.name} ({e.subDepotCategory})</option>
           ))}
         </select>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <button onClick={handlePrevMonth} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '4px' }}>
-            <ChevronLeft size={20} />
-          </button>
-          <span style={{ fontWeight: '600', minWidth: '140px', textAlign: 'center' }}>
-            {format(currentDate, 'MMMM yyyy')}
-          </span>
-          <button onClick={handleNextMonth} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '4px' }}>
-            <ChevronRight size={20} />
-          </button>
-        </div>
-      </div>
-
-      <div style={styles.legendCard}>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', margin: '0 0 12px' }}>Attendance Legend</h3>
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          {ATTENDANCE_OPTIONS.map(opt => (
-            <div key={opt.status} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ width: '20px', height: '20px', borderRadius: '4px', background: opt.bgColor, border: `2px solid ${opt.color}` }}></div>
-              <span style={{ fontSize: '12px' }}>{opt.label} ({opt.status}) - {opt.color === '#166534' || opt.color === '#1e40af' || opt.color === '#7c3aed' || opt.color === '#059669' ? 'Paid' : 'Unpaid'}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       {selectedEmployee && (
-        <div className="attendance-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', marginTop: '24px' }}>
-          <div style={styles.calendarCard}>
-            <div style={styles.calendarHeader}>
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                <div key={d} style={styles.calendarDayHeader}>{d}</div>
-              ))}
-            </div>
-            <div style={styles.calendarGrid}>
-              {blanks.map((_, i) => <div key={`b-${i}`} style={styles.calendarBlank}></div>)}
-              {monthDays.map(day => {
-                const dateStr = format(day, 'yyyy-MM-dd');
-                const record = empAttendance[dateStr];
-                const dayOfWeek = getDay(day);
-                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                const status = record?.status;
-                const style = getStatusStyle(status as AttendanceStatus);
-                
-                return (
-                  <div 
-                    key={dateStr} 
-                    style={{ ...styles.calendarDay, background: style.bgColor }}
-                    onClick={() => cycleStatus(dateStr, status as AttendanceStatus)}
-                  >
-                    <span style={{ 
-                      fontSize: '12px', 
-                      fontWeight: isToday(day) ? '700' : '400',
-                      color: isToday(day) ? '#10b981' : style.color
-                    }}>
-                      {format(day, 'd')}
-                    </span>
-                    <span style={{ fontSize: '10px', color: style.color, fontWeight: '600' }}>
-                      {status || (isWeekend ? 'WO' : '-')}
-                    </span>
+        <>
+          <div style={styles.statsRow}>
+            {statCards.map(card => {
+              const Icon = card.icon;
+              return (
+                <div key={card.key} style={{ ...styles.statCard, background: card.bg }}>
+                  <div style={{ ...styles.statIcon, background: card.color }}>
+                    <Icon size={18} color="#fff" />
                   </div>
-                );
-              })}
-            </div>
+                  <div>
+                    <p style={{ ...styles.statValue, color: card.color }}>{card.value}</p>
+                    <p style={styles.statLabel}>{card.label}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={styles.profileCard}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <div style={styles.avatar}>{selectedEmployee.name.charAt(0)}</div>
-                <div>
-                  <p style={{ fontWeight: '600', margin: 0 }}>{selectedEmployee.name}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
-                    {selectedEmployee.employeeId} • {selectedEmployee.subDepotCategory}
-                    {selectedEmployee.busCategory ? ` • ${selectedEmployee.busCategory === '8 METER' ? '8M Bus' : '12M Bus'}` : ''}
-                  </p>
-                </div>
-              </div>
-              
-              <h4 style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', margin: '0 0 12px', textTransform: 'uppercase' }}>
-                Monthly Summary - {format(currentDate, 'MMMM yyyy')}
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div style={styles.summaryItem}>
-                  <CheckCircle size={16} color="#10b981" />
-                  <span>Present</span>
-                  <strong>{summary.present}</strong>
-                </div>
-                <div style={styles.summaryItem}>
-                  <Clock size={16} color="#dc2626" />
-                  <span>Absent</span>
-                  <strong>{summary.absent}</strong>
-                </div>
-                <div style={styles.summaryItem}>
-                  <Calendar size={16} color="#1e40af" />
-                  <span>Paid Leave</span>
-                  <strong>{summary.paidLeave}</strong>
-                </div>
-                <div style={styles.summaryItem}>
-                  <Calendar size={16} color="#7c3aed" />
-                  <span>Holiday</span>
-                  <strong>{summary.holiday}</strong>
-                </div>
-                <div style={styles.summaryItem}>
-                  <Users size={16} color="#059669" />
-                  <span>Week Off</span>
-                  <strong>{summary.weekOff}</strong>
-                </div>
-                <div style={styles.summaryItem}>
-                  <Clock size={16} color="#dc2626" />
-                  <span>LOP</span>
-                  <strong>{summary.lop}</strong>
-                </div>
-              </div>
-
-              {selectedEmployee.subDepotCategory === 'DRIVERS' && summary.absent === 0 && summary.lop === 0 && (
-                <div style={{ marginTop: '12px', padding: '12px', background: '#dcfce7', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckCircle size={20} color="#166534" />
-                  <div>
-                    <p style={{ fontSize: '12px', fontWeight: '600', color: '#166534', margin: 0 }}>100% Attendance!</p>
-                    <p style={{ fontSize: '11px', color: '#166534', margin: '2px 0 0' }}>Driver incentive eligible</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={styles.statusCard}>
-              <h4 style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', margin: '0 0 12px', textTransform: 'uppercase' }}>
-                Click any date to change status
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {ATTENDANCE_OPTIONS.map(opt => (
-                  <div 
-                    key={opt.status} 
-                    style={{ 
-                      padding: '8px 12px', 
-                      background: opt.bgColor, 
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '12px',
-                      fontWeight: '500',
-                      color: opt.color
-                    }}
-                  >
-                    <span>{opt.label}</span>
-                    <span style={{ marginLeft: 'auto' }}>{opt.status}</span>
-                  </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', marginTop: '24px' }}>
+            <div style={styles.calendarCard}>
+              <div style={styles.calendarHeader}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                  <div key={d} style={styles.calendarDayHeader}>{d}</div>
                 ))}
               </div>
+              <div style={styles.calendarGrid}>
+                {blanks.map((_, i) => <div key={`b-${i}`} style={styles.calendarBlank}></div>)}
+                {monthDays.map(day => {
+                  const dateStr = format(day, 'yyyy-MM-dd');
+                  const record = empAttendance[dateStr];
+                  const dayOfWeek = getDay(day);
+                  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                  const status = record?.status;
+                  const opt = status ? ATTENDANCE_OPTIONS.find(o => o.status === status) : undefined;
+                  const isHovered = hoveredDate === dateStr;
+
+                  return (
+                    <div
+                      key={dateStr}
+                      title={`${format(day, 'd MMM yyyy')}${opt ? ` — ${opt.label}` : ' — click to mark'}`}
+                      onMouseEnter={() => setHoveredDate(dateStr)}
+                      onMouseLeave={() => setHoveredDate('')}
+                      onClick={() => cycleStatus(dateStr, status as AttendanceStatus)}
+                      style={{
+                        ...styles.calendarDay,
+                        background: opt ? opt.gradient : (isWeekend ? '#f1f5f9' : '#ffffff'),
+                        border: isToday(day)
+                          ? `2px solid #10b981`
+                          : opt
+                            ? `1.5px solid ${opt.color}40`
+                            : '1px solid #e2e8f0',
+                        boxShadow: isHovered ? '0 6px 16px rgba(15,23,42,0.12)' : '0 1px 2px rgba(15,23,42,0.04)',
+                        transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{
+                        fontSize: '13px',
+                        fontWeight: isToday(day) ? '800' : '500',
+                        color: isToday(day) ? '#059669' : (opt?.color || '#334155'),
+                      }}>
+                        {format(day, 'd')}
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: '700',
+                        color: opt?.color || '#94a3b8',
+                        background: opt ? '#ffffffb3' : 'transparent',
+                        padding: '2px 8px',
+                        borderRadius: '8px',
+                      }}>
+                        {opt ? opt.label : (isWeekend ? 'WO' : '—')}
+                      </span>
+                      {isToday(day) && (
+                        <span style={styles.todayTag}>Today</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={styles.profileCard}>
+                <div style={styles.profileHeader}>
+                  <div style={styles.avatar}>{selectedEmployee.name.charAt(0)}</div>
+                  <div>
+                    <p style={{ fontWeight: '700', margin: 0, color: '#0f172a' }}>{selectedEmployee.name}</p>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                      {selectedEmployee.employeeId} • {selectedEmployee.subDepotCategory}
+                      {selectedEmployee.busCategory ? ` • ${selectedEmployee.busCategory === '8 METER' ? '8M Bus' : '12M Bus'}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.progressWrap}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginBottom: '6px' }}>
+                    <span>Attendance — {format(currentDate, 'MMMM yyyy')}</span>
+                    <strong style={{ color: '#059669' }}>
+                      {Math.round((summary.present / totalDays) * 100)}%
+                    </strong>
+                  </div>
+                  <div style={styles.progressTrack}>
+                    <div style={{
+                      ...styles.progressFill,
+                      width: `${(summary.present / totalDays) * 100}%`,
+                    }} />
+                  </div>
+                </div>
+
+                {selectedEmployee.subDepotCategory === 'DRIVERS' && summary.absent === 0 && summary.lop === 0 && (
+                  <div style={styles.incentiveBadge}>
+                    <CheckCircle size={16} color="#059669" />
+                    <div>
+                      <p style={{ fontSize: '12px', fontWeight: '700', color: '#065f46', margin: 0 }}>100% Attendance!</p>
+                      <p style={{ fontSize: '11px', color: '#065f46', margin: '2px 0 0' }}>Driver incentive eligible</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={styles.legendCard}>
+                <h4 style={styles.legendTitle}>Click a date to mark</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {ATTENDANCE_OPTIONS.map(opt => (
+                    <div key={opt.status} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '22px', height: '22px', borderRadius: '7px', background: opt.gradient, border: `1.5px solid ${opt.color}55` }}></div>
+                      <span style={{ fontSize: '13px', fontWeight: '500', color: '#334155' }}>{opt.label}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: '700', color: opt.color, background: opt.bgColor, padding: '2px 8px', borderRadius: '6px' }}>
+                        {opt.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontSize: '11px', color: '#94a3b8', margin: '12px 0 0', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
+                  Day click cycles: <strong>Present → Absent → LOP</strong>. Use Bulk Update for leaves/holidays.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {!selectedEmployee && (
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '12px', marginTop: '24px' }}>
-          <Users size={48} color="#94a3b8" />
-          <p style={{ color: '#64748b', marginTop: '16px' }}>Select an employee to mark attendance</p>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '16px', marginTop: '24px', border: '1px dashed #e2e8f0' }}>
+          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+            <Users size={32} color="#fff" />
+          </div>
+          <p style={{ color: '#64748b', marginTop: '16px', fontWeight: '500' }}>Select an employee to mark attendance</p>
         </div>
       )}
 
       {showBulkModal && (
         <div style={styles.modalOverlay} onClick={() => setShowBulkModal(false)}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px' }}>Bulk Update Attendance</h3>
-            <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 16px' }}>
-              Update {filteredEmployees.length} employees for {format(currentDate, 'MMMM yyyy')}
+            <h3 style={{ margin: '0 0 6px' }}>Bulk Update Attendance</h3>
+            <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px' }}>
+              Update {filteredEmployees.length} employees for {format(currentDate, 'MMMM yyyy')} (weekdays only)
             </p>
             <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as AttendanceStatus)} style={styles.select}>
               {ATTENDANCE_OPTIONS.map(opt => (
@@ -433,24 +439,39 @@ export default function AttendancePage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  container: { padding: '24px', maxWidth: '1400px', margin: '0 auto' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' },
+  title: { fontSize: '28px', fontWeight: '700', color: '#0f172a', margin: 0, letterSpacing: '-0.02em' },
+  subtitle: { fontSize: '14px', color: '#64748b', margin: '4px 0 0' },
+  monthNav: { display: 'flex', alignItems: 'center', gap: '4px', padding: '4px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' },
+  monthNavBtn: { border: 'none', background: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  actionBtn: { padding: '10px 16px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 10px rgba(16,185,129,0.25)' },
+  actionBtnOutline: { padding: '10px 16px', background: '#fff', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
   filters: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' },
-  select: { padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', background: '#fff', minWidth: '150px' },
-  actionBtn: { padding: '10px 16px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
-  actionBtnOutline: { padding: '10px 16px', background: '#fff', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
-  legendCard: { padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' },
-  calendarCard: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
-  calendarHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '8px' },
-  calendarDayHeader: { textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#64748b', padding: '8px' },
-  calendarGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' },
-  calendarBlank: { background: '#f8fafc', borderRadius: '6px', minHeight: '60px' },
-  calendarDay: { borderRadius: '6px', padding: '8px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60px', transition: 'all 0.2s' },
-  profileCard: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
+  select: { padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', background: '#fff', minWidth: '150px' },
+  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '4px' },
+  statCard: { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', borderRadius: '14px', border: '1px solid rgba(0,0,0,0.04)' },
+  statIcon: { width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  statValue: { fontSize: '22px', fontWeight: '800', margin: 0, lineHeight: 1.1 },
+  statLabel: { fontSize: '11px', color: '#64748b', margin: '2px 0 0', fontWeight: '500' },
+  calendarCard: { background: '#fff', borderRadius: '18px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' },
+  calendarHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', marginBottom: '8px' },
+  calendarDayHeader: { textAlign: 'center', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', padding: '6px' },
+  calendarGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' },
+  calendarBlank: { background: '#fafafa', borderRadius: '12px', minHeight: '72px' },
+  calendarDay: { borderRadius: '12px', padding: '8px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', minHeight: '72px', transition: 'transform 0.15s ease, box-shadow 0.15s ease', position: 'relative' },
+  todayTag: { position: 'absolute', top: '4px', right: '6px', fontSize: '8px', fontWeight: '800', color: '#fff', background: '#10b981', padding: '1px 6px', borderRadius: '8px' },
+  profileCard: { background: '#fff', borderRadius: '18px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' },
+  profileHeader: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' },
   avatar: { width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #3b82f6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '18px' },
-  summaryItem: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' },
-  summaryItemStrong: { marginLeft: 'auto', fontWeight: '700' },
-  statusCard: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: '#fff', borderRadius: '12px', padding: '24px', width: '90%', maxWidth: '400px' },
-  cancelBtn: { flex: 1, padding: '12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' },
-  submitBtn: { flex: 1, padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }
+  progressWrap: { marginBottom: '12px' },
+  progressTrack: { height: '8px', borderRadius: '6px', background: '#f1f5f9', overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: '6px', background: 'linear-gradient(90deg, #10b981, #34d399)', transition: 'width 0.4s ease' },
+  incentiveBadge: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: '#ecfdf5', borderRadius: '10px', border: '1px solid #a7f3d0' },
+  legendCard: { background: '#fff', borderRadius: '18px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' },
+  legendTitle: { fontSize: '12px', fontWeight: '700', color: '#0f172a', margin: '0 0 14px', textTransform: 'uppercase', letterSpacing: '0.03em' },
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modal: { background: '#fff', borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' },
+  cancelBtn: { flex: 1, padding: '12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', color: '#475569' },
+  submitBtn: { flex: 1, padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '600' }
 };
