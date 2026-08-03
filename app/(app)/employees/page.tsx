@@ -8,7 +8,7 @@ import {
   Search, Filter, Plus, ChevronDown, ChevronUp, Edit2, Trash2, 
   Eye, Download, X, User, Mail, Phone, MapPin, Calendar,
   Briefcase, Building2, CreditCard, FileText, Award, AlertTriangle,
-  ArrowLeftRight, History, ShieldCheck, Bus
+  ArrowLeftRight, History, ShieldCheck, Bus, UserX
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
@@ -225,7 +225,7 @@ export default function EmployeesPage() {
     if (matches.length > 0 && !rejoinChoice) {
       setAadhaarMatches(matches);
       setRejoinChoice(null);
-      toast.error(`Aadhaar already exists for ${matches.length} record(s)`);
+      toast.error(`Duplicate entry: Aadhaar already exists for ${matches.length} record(s)`);
       return;
     }
 
@@ -274,8 +274,20 @@ export default function EmployeesPage() {
     };
 
     if (editingEmployee) {
-      dataService.updateEmployee(editingEmployee.id, { ...payload, employeeId: editingEmployee.employeeId });
-      toast.success('Employee updated successfully');
+      const finalPayload = { ...payload, employeeId: editingEmployee.employeeId };
+      if (isAdmin) {
+        dataService.updateEmployee(editingEmployee.id, finalPayload);
+        toast.success('Employee updated successfully');
+      } else if (user) {
+        const req = dataService.createChangeRequest(editingEmployee, finalPayload, user);
+        if (!req) {
+          toast.error('No changes detected to submit');
+          setShowAddModal(false);
+          loadData();
+          return;
+        }
+        toast.success('Changes submitted for Admin approval. Employee will be updated once approved.');
+      }
     } else {
       const masterEmployeeId = rejoinChoice === 'REJOIN' && aadhaarMatches.length > 0
         ? aadhaarMatches[0].masterEmployeeId
@@ -355,10 +367,10 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleDeleteEmployee = (emp: Employee) => {
-    if (confirm(`Are you sure you want to delete ${emp.name}?`)) {
-      dataService.deleteEmployee(emp.id);
-      toast.success('Employee deleted successfully');
+  const handleTerminateEmployee = (emp: Employee) => {
+    if (confirm(`Mark ${emp.name} as TERMINATED?\n\nTheir record will be retained and marked Terminated — data is never deleted.`)) {
+      dataService.terminateEmployee(emp.id, user?.id);
+      toast.success(`${emp.name} marked as Terminated. Data retained.`);
       loadData();
     }
   };
@@ -599,15 +611,13 @@ export default function EmployeesPage() {
                     <button onClick={() => handleViewEmployee(emp)} style={styles.actionBtn} title="View">
                       <Eye size={16} color="#64748b" />
                     </button>
+                    <button onClick={() => openEditModal(emp)} style={styles.actionBtn} title={isAdmin ? 'Edit' : 'Request Changes'}>
+                      <Edit2 size={16} color="#3b82f6" />
+                    </button>
                     {isAdmin && (
-                      <>
-                        <button onClick={() => openEditModal(emp)} style={styles.actionBtn} title="Edit">
-                          <Edit2 size={16} color="#3b82f6" />
-                        </button>
-                        <button onClick={() => handleDeleteEmployee(emp)} style={styles.actionBtn} title="Delete">
-                          <Trash2 size={16} color="#ef4444" />
-                        </button>
-                      </>
+                      <button onClick={() => handleTerminateEmployee(emp)} style={styles.actionBtn} title="Terminate (data retained)">
+                        <UserX size={16} color="#ef4444" />
+                      </button>
                     )}
                     <button onClick={() => generateOfferLetter(emp)} style={styles.actionBtn} title="Offer Letter">
                       <FileText size={16} color="#10b981" />
@@ -1048,6 +1058,11 @@ export default function EmployeesPage() {
               </button>
             </div>
             <div style={styles.modalBody}>
+              {editingEmployee && !isAdmin && (
+                <div style={{ marginBottom: '16px', padding: '10px 14px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', fontSize: '12px', color: '#92400e' }}>
+                  You are requesting changes to this employee. Admin approval is required before the changes take effect.
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div style={styles.fieldGroup}>
                   <label style={styles.fieldLabel}>Full Name *</label>

@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/context/AuthContext';
 import { Branch, IncentiveTier } from '../../lib/types';
 import {
   Building2, MapPin, Phone, Mail, Users, TrendingUp, Edit2,
-  X, Check, Search, Filter, Plus, Trash2, Award
+  X, Check, Search, Filter, Plus, Trash2, Award, Copy
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,18 @@ export default function DepotsPage() {
   const [incentiveTiers, setIncentiveTiers] = useState<IncentiveTier[]>([]);
   const [hourlyOvertimeRate, setHourlyOvertimeRate] = useState(0);
   const [fullDayOvertimeRate, setFullDayOvertimeRate] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    code: '',
+    manager: '',
+    managerPhone: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: ''
+  });
+  const [templateBranchId, setTemplateBranchId] = useState('');
 
   useEffect(() => {
     loadBranches();
@@ -28,6 +40,37 @@ export default function DepotsPage() {
 
   const loadBranches = () => {
     setBranches(dataService.getBranches());
+  };
+
+  const openCreateModal = () => {
+    setCreateForm({
+      name: '',
+      code: '',
+      manager: '',
+      managerPhone: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: ''
+    });
+    setTemplateBranchId('');
+    setShowCreateModal(true);
+  };
+
+  const handleCreateDepot = () => {
+    if (!createForm.name.trim()) return toast.error('Depot name is required');
+    if (!createForm.code.trim()) return toast.error('Depot code is required');
+    if (!createForm.city.trim()) return toast.error('City is required');
+
+    const branch = dataService.createDepotWithTemplate(createForm, templateBranchId || undefined);
+    if (templateBranchId) {
+      const template = branches.find(b => b.id === templateBranchId);
+      toast.success(`Depot "${branch.name}" created. Copied structure & salary setup from ${template?.name || 'template'}.`);
+    } else {
+      toast.success(`Depot "${branch.name}" created with default setup.`);
+    }
+    setShowCreateModal(false);
+    loadBranches();
   };
 
   const filteredBranches = branches.filter(branch =>
@@ -107,6 +150,12 @@ export default function DepotsPage() {
             style={styles.searchInput}
           />
         </div>
+        {isAdmin && (
+          <button onClick={openCreateModal} style={styles.createBtn}>
+            <Plus size={16} />
+            Create Depot
+          </button>
+        )}
       </div>
 
       <div style={styles.statsRow}>
@@ -408,6 +457,81 @@ export default function DepotsPage() {
           </div>
         </div>
       )}
+      {showCreateModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
+          <div style={{ ...styles.modal, maxWidth: '620px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={{ margin: 0 }}>Create New Depot</h2>
+              <button onClick={() => setShowCreateModal(false)} style={styles.closeBtn}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={styles.formRow}>
+                  <label>Depot Name *</label>
+                  <input style={styles.input} value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} placeholder="e.g. Andheri Depot" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>Depot Code *</label>
+                  <input style={styles.input} value={createForm.code} onChange={e => setCreateForm({ ...createForm, code: e.target.value })} placeholder="e.g. D02" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>City *</label>
+                  <input style={styles.input} value={createForm.city} onChange={e => setCreateForm({ ...createForm, city: e.target.value })} placeholder="e.g. Mumbai" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>State</label>
+                  <input style={styles.input} value={createForm.state} onChange={e => setCreateForm({ ...createForm, state: e.target.value })} placeholder="e.g. Maharashtra" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>Address</label>
+                  <input style={styles.input} value={createForm.address} onChange={e => setCreateForm({ ...createForm, address: e.target.value })} placeholder="Depot address" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>Pincode</label>
+                  <input style={styles.input} value={createForm.pincode} onChange={e => setCreateForm({ ...createForm, pincode: e.target.value })} placeholder="e.g. 400058" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>Manager</label>
+                  <input style={styles.input} value={createForm.manager} onChange={e => setCreateForm({ ...createForm, manager: e.target.value })} placeholder="Manager name" />
+                </div>
+                <div style={styles.formRow}>
+                  <label>Manager Phone</label>
+                  <input style={styles.input} value={createForm.managerPhone} onChange={e => setCreateForm({ ...createForm, managerPhone: e.target.value })} placeholder="10-digit mobile" inputMode="numeric" />
+                </div>
+              </div>
+
+              <div style={{ ...styles.formRow, marginTop: '16px', padding: '14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: '#166534' }}>
+                  <Copy size={14} /> Copy structure from an existing depot
+                </label>
+                <p style={{ fontSize: '12px', color: '#166534', margin: '6px 0 10px' }}>
+                  Copies incentive tiers, overtime rates, salary setup and the active employee roster (salaries, departments, designations). Historical attendance is not carried over.
+                </p>
+                <select
+                  style={{ ...styles.select, width: '100%' }}
+                  value={templateBranchId}
+                  onChange={e => setTemplateBranchId(e.target.value)}
+                >
+                  <option value="">-- Empty depot (default setup only) --</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <button onClick={() => setShowCreateModal(false)} style={styles.cancelBtn}>Cancel</button>
+                <button onClick={handleCreateDepot} style={styles.saveBtn}>
+                  <Plus size={16} />
+                  Create Depot
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -419,6 +543,7 @@ const styles: Record<string, React.CSSProperties> = {
   subtitle: { fontSize: '14px', color: '#64748b', margin: 0 },
   searchBox: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' },
   searchInput: { border: 'none', outline: 'none', fontSize: '14px', width: '200px' },
+  createBtn: { padding: '10px 16px', background: '#10b981', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '500', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
   statsRow: { display: 'flex', gap: '16px', marginBottom: '24px' },
   statBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
   statValue: { fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 },

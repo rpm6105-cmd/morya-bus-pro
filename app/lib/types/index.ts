@@ -267,3 +267,34 @@ export interface EmployeeAssignment {
   reason: string;
   createdAt: string;
 }
+
+export type ChangeRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface EmployeeChangeRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  summary: string;
+  requestedBy: string;
+  requestedByName: string;
+  changes: Partial<Employee>;
+  status: ChangeRequestStatus;
+  createdAt: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  remarks?: string;
+}
+
+export type NotificationType = 'INFO' | 'APPROVAL' | 'DUPLICATE' | 'SYSTEM';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  link?: string;
+  read: boolean;
+  createdAt: string;
+}

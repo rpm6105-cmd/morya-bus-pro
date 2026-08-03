@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { 
+import {
   LayoutDashboard, 
   Users, 
   Calculator, 
@@ -21,7 +21,8 @@ import {
   Clock,
   Calendar,
   Menu,
-  X
+  X,
+  ClipboardCheck
 } from 'lucide-react';
 import { useAuth } from '../../lib/context/AuthContext';
 import { dataService } from '../../lib/services/dataService';
@@ -32,6 +33,16 @@ const Sidebar = () => {
   const { user, isAdmin, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+
+  useEffect(() => {
+    const updateCount = () => {
+      setPendingApprovals(isAdmin ? dataService.getPendingChangeRequests().length : 0);
+    };
+    updateCount();
+    window.addEventListener('hrms-approvals-updated', updateCount);
+    return () => window.removeEventListener('hrms-approvals-updated', updateCount);
+  }, [isAdmin]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768);
@@ -64,6 +75,7 @@ const Sidebar = () => {
     { name: 'Payroll', icon: Calculator, path: '/payroll' },
     { name: 'Salary Sheet', icon: FileSpreadsheet, path: '/salary-sheet' },
     { name: 'Depots', icon: Building2, path: '/depots' },
+    { name: 'Approvals', icon: ClipboardCheck, path: '/approvals' },
     { name: 'Reports', icon: BarChart3, path: '/reports' },
     { name: 'User Management', icon: UserCog, path: '/users' },
     { name: 'Settings', icon: Settings, path: '/settings' },
@@ -76,6 +88,7 @@ const Sidebar = () => {
     { name: 'Overtime', icon: Clock, path: '/overtime' },
     { name: 'Payroll', icon: Calculator, path: '/payroll' },
     { name: 'Salary Sheet', icon: FileSpreadsheet, path: '/salary-sheet' },
+    { name: 'My Requests', icon: ClipboardCheck, path: '/approvals' },
     { name: 'Reports', icon: BarChart3, path: '/reports' },
   ];
 
@@ -159,6 +172,24 @@ const Sidebar = () => {
                   >
                     <Icon size={18} />
                     {item.name}
+                    {item.path === '/approvals' && isAdmin && pendingApprovals > 0 && (
+                      <span style={{
+                        marginLeft: 'auto',
+                        background: '#ef4444',
+                        color: '#fff',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        minWidth: '20px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 5px'
+                      }}>
+                        {pendingApprovals}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );

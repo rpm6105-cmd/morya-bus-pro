@@ -243,6 +243,44 @@ create table if not exists hrms_users (
 );
 
 -- ============================================================
+-- EMPLOYEE CHANGE REQUESTS (HR edits awaiting Admin approval)
+-- ============================================================
+create table if not exists employee_change_requests (
+  "id" text primary key,
+  "employeeId" text not null,
+  "employeeName" text,
+  "summary" text,
+  "requestedBy" text,
+  "requestedByName" text,
+  "changes" jsonb default '{}',
+  "status" text default 'PENDING',
+  "createdAt" text,
+  "reviewedBy" text,
+  "reviewedByName" text,
+  "reviewedAt" text,
+  "remarks" text
+);
+
+create index if not exists idx_cr_status on employee_change_requests ("status");
+create index if not exists idx_cr_emp on employee_change_requests ("employeeId");
+
+-- ============================================================
+-- NOTIFICATIONS
+-- ============================================================
+create table if not exists notifications (
+  "id" text primary key,
+  "userId" text not null,
+  "title" text,
+  "message" text,
+  "type" text default 'INFO',
+  "link" text,
+  "read" boolean default false,
+  "createdAt" text
+);
+
+create index if not exists idx_notifications_user on notifications ("userId", "read");
+
+-- ============================================================
 -- Seed default settings
 -- ============================================================
 insert into system_settings ("key", "value") values

@@ -102,7 +102,7 @@ export default function AttendancePage() {
   };
 
   const cycleStatus = (dateStr: string, currentStatus?: AttendanceStatus) => {
-    const statuses: AttendanceStatus[] = ['P', 'A', 'PL', 'H', 'WO', 'LOP'];
+    const statuses: AttendanceStatus[] = ['P', 'A', 'LOP'];
     const currentIdx = currentStatus ? statuses.indexOf(currentStatus) : -1;
     const nextIdx = (currentIdx + 1) % statuses.length;
     const newStatus = statuses[nextIdx];
@@ -214,7 +214,7 @@ export default function AttendancePage() {
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: '600', margin: 0 }}>Attendance Management</h1>
           <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0' }}>
-            Mark daily attendance: Present (P), Absent/LWP (A), Paid Leave (PL), Holiday (H), Week Off (WO), LOP
+            Mark daily attendance manually: click a date to cycle Present (P) → Absent (A) → LOP
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>

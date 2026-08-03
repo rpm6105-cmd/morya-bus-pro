@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { StoreProvider } from "../lib/context/StoreContext";
 import { AuthProvider } from "../lib/context/AuthContext";
 import Sidebar from "../components/ui/Sidebar";
+import NotificationBell from "../components/ui/NotificationBell";
 import { Toaster } from "react-hot-toast";
 import ProtectedRoute from "../components/ProtectedRoute";
 
@@ -28,6 +29,11 @@ export default function AppLayout({
           <div className="app-container">
             <Sidebar />
             <main className="main-content">
+              <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end', padding: '16px 24px 0 0', pointerEvents: 'none' }}>
+                <div style={{ pointerEvents: 'auto' }}>
+                  <NotificationBell />
+                </div>
+              </div>
               {children}
             </main>
           </div>

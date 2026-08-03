@@ -3,7 +3,7 @@
 import { 
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
-  IncentiveTier, User
+  IncentiveTier, User, EmployeeChangeRequest, AppNotification, NotificationType
 } from '../types';
 import { normalizeAadhaar } from '../utils/incentive';
 import { calculatePayroll as payrollCalc } from '../utils/payrollCalc';
@@ -20,6 +20,8 @@ const OVERTIME_KEY = 'hrms_overtime';
 const SUB_DEPOTS_KEY = 'hrms_subdepots';
 const ASSIGNMENTS_KEY = 'hrms_assignments';
 const USERS_KEY = 'hrms_users';
+const CHANGE_REQUESTS_KEY = 'hrms_change_requests';
+const NOTIFICATIONS_KEY = 'hrms_notifications';
 
 const DEFAULT_SETTINGS: SystemSettings = {
   pfRate: 12,
@@ -52,6 +54,8 @@ class DataService {
   private subDepots: SubDepot[] = [];
   private assignments: EmployeeAssignment[] = [];
   private users: User[] = [];
+  private changeRequests: EmployeeChangeRequest[] = [];
+  private notifications: AppNotification[] = [];
   private settings: SystemSettings = { ...DEFAULT_SETTINGS };
 
   async initialize(): Promise<boolean> {
@@ -99,6 +103,8 @@ class DataService {
       const subDepots = localStorage.getItem(SUB_DEPOTS_KEY);
       const assignments = localStorage.getItem(ASSIGNMENTS_KEY);
       const users = localStorage.getItem(USERS_KEY);
+      const changeRequests = localStorage.getItem(CHANGE_REQUESTS_KEY);
+      const notifications = localStorage.getItem(NOTIFICATIONS_KEY);
 
       this.branches = branches ? JSON.parse(branches) : this.generateBranches();
       this.employees = employees ? JSON.parse(employees) : this.generateEmployees();
@@ -110,6 +116,8 @@ class DataService {
       this.subDepots = subDepots ? JSON.parse(subDepots) : this.generateSubDepots();
       this.assignments = assignments ? JSON.parse(assignments) : [];
       this.users = users ? JSON.parse(users) : this.generateDefaultUsers();
+      this.changeRequests = changeRequests ? JSON.parse(changeRequests) : [];
+      this.notifications = notifications ? JSON.parse(notifications) : [];
       this.settings = settings ? { ...DEFAULT_SETTINGS, ...JSON.parse(settings) } : { ...DEFAULT_SETTINGS };
     } catch (e) {
       console.error('Failed to load local cache', e);
@@ -117,7 +125,7 @@ class DataService {
   }
 
   private async loadAllFromSupabase() {
-    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users'];
+    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users', 'employee_change_requests', 'notifications'];
     const results = await Promise.all(
       tableNames.map(t => supabase.from(t).select('*').limit(100000))
     );
@@ -137,6 +145,8 @@ class DataService {
     this.subDepots = data.subdepots;
     this.assignments = data.assignments;
     this.users = data.hrms_users;
+    this.changeRequests = data.employee_change_requests || [];
+    this.notifications = data.notifications || [];
 
     const attendanceMap: Attendance = {};
     data.attendance.forEach((row: any) => {
@@ -188,6 +198,8 @@ class DataService {
       localStorage.setItem(SUB_DEPOTS_KEY, JSON.stringify(this.subDepots));
       localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(this.assignments));
       localStorage.setItem(USERS_KEY, JSON.stringify(this.users));
+      localStorage.setItem(CHANGE_REQUESTS_KEY, JSON.stringify(this.changeRequests));
+      localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(this.notifications));
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
     } catch (e) {
       console.error('Failed to write local cache', e);
@@ -633,6 +645,332 @@ class DataService {
     return true;
   }
 
+  terminateEmployee(id: string, userId?: string): Employee | null {
+    this.ensureData();
+    const index = this.employees.findIndex(e => e.id === id);
+    if (index === -1) return null;
+    this.employees[index] = {
+      ...this.employees[index],
+      status: 'TERMINATED',
+      updatedAt: new Date().toISOString()
+    };
+    this.cache();
+    this.persistRows('employees', [this.employees[index]], ['id']);
+    if (userId) {
+      this.logAudit(userId, 'EMPLOYEE_TERMINATED', 'employees', id,
+        { status: 'ACTIVE' }, { status: 'TERMINATED' });
+    }
+    return this.employees[index];
+  }
+
+  getNotifications(userId?: string): AppNotification[] {
+    this.ensureData();
+    const list = userId ? this.notifications.filter(n => n.userId === userId) : this.notifications;
+    return list.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getUnreadNotificationCount(userId: string): number {
+    this.ensureData();
+    return this.notifications.filter(n => n.userId === userId && !n.read).length;
+  }
+
+  addNotification(input: { userId: string; title: string; message: string; type?: NotificationType; link?: string }): AppNotification {
+    this.ensureData();
+    const notification: AppNotification = {
+      id: `ntf-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      userId: input.userId,
+      title: input.title,
+      message: input.message,
+      type: input.type || 'INFO',
+      link: input.link,
+      read: false,
+      createdAt: new Date().toISOString()
+    };
+    this.notifications.push(notification);
+    this.cache();
+    this.persistRows('notifications', [notification], ['id']);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-notifications-updated'));
+    }
+    return notification;
+  }
+
+  markNotificationRead(id: string) {
+    this.ensureData();
+    const idx = this.notifications.findIndex(n => n.id === id);
+    if (idx === -1) return;
+    this.notifications[idx] = { ...this.notifications[idx], read: true };
+    this.cache();
+    this.persistRows('notifications', [this.notifications[idx]], ['id']);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-notifications-updated'));
+    }
+  }
+
+  markAllNotificationsRead(userId: string) {
+    this.ensureData();
+    let changed = false;
+    this.notifications = this.notifications.map(n => {
+      if (n.userId === userId && !n.read) { changed = true; return { ...n, read: true }; }
+      return n;
+    });
+    if (!changed) return;
+    this.cache();
+    this.persistRows('notifications', this.notifications.filter(n => n.userId === userId), ['id']);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-notifications-updated'));
+    }
+  }
+
+  getChangeRequests(userId?: string, role?: string): EmployeeChangeRequest[] {
+    this.ensureData();
+    let list = this.changeRequests;
+    if (role === 'HR') {
+      list = list.filter(r => r.requestedBy === userId);
+    }
+    return list.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getPendingChangeRequests(): EmployeeChangeRequest[] {
+    this.ensureData();
+    return this.changeRequests.filter(r => r.status === 'PENDING').slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  createChangeRequest(employee: Employee, changes: Partial<Employee>, user: User): EmployeeChangeRequest | null {
+    this.ensureData();
+    const changedKeys = (Object.keys(changes) as (keyof Employee)[]).filter(k => {
+      const cur = employee[k];
+      const next = changes[k];
+      return JSON.stringify(cur ?? null) !== JSON.stringify(next ?? null);
+    });
+    if (changedKeys.length === 0) return null;
+
+    const diff: Partial<Employee> = {} as Partial<Employee>;
+    changedKeys.forEach(k => { (diff as any)[k] = (changes as any)[k]; });
+
+    const request: EmployeeChangeRequest = {
+      id: `cr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      summary: changedKeys.join(', '),
+      requestedBy: user.id,
+      requestedByName: user.name,
+      changes: diff,
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    };
+    this.changeRequests.push(request);
+    this.cache();
+    this.persistRows('employee_change_requests', [request], ['id']);
+
+    const admins = this.users.filter(u => u.role === 'ADMIN');
+    admins.forEach(admin => {
+      this.addNotification({
+        userId: admin.id,
+        title: 'Employee change pending approval',
+        message: `${user.name} requested ${changedKeys.length} change(s) for ${employee.name}.`,
+        type: 'APPROVAL',
+        link: '/approvals'
+      });
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-approvals-updated'));
+    }
+    return request;
+  }
+
+  approveChangeRequest(id: string, reviewer: User): EmployeeChangeRequest | null {
+    this.ensureData();
+    const idx = this.changeRequests.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    const request = this.changeRequests[idx];
+    if (request.status !== 'PENDING') return request;
+
+    this.updateEmployee(request.employeeId, request.changes);
+
+    this.changeRequests[idx] = {
+      ...request,
+      status: 'APPROVED',
+      reviewedBy: reviewer.id,
+      reviewedByName: reviewer.name,
+      reviewedAt: new Date().toISOString()
+    };
+    this.cache();
+    this.persistRows('employee_change_requests', [this.changeRequests[idx]], ['id']);
+
+    this.addNotification({
+      userId: request.requestedBy,
+      title: 'Change request approved',
+      message: `Your changes to ${request.employeeName} (${request.summary}) were approved by ${reviewer.name} and applied.`,
+      type: 'APPROVAL',
+      link: '/approvals'
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-approvals-updated'));
+    }
+    return this.changeRequests[idx];
+  }
+
+  rejectChangeRequest(id: string, reviewer: User, remarks?: string): EmployeeChangeRequest | null {
+    this.ensureData();
+    const idx = this.changeRequests.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    const request = this.changeRequests[idx];
+    if (request.status !== 'PENDING') return request;
+
+    this.changeRequests[idx] = {
+      ...request,
+      status: 'REJECTED',
+      reviewedBy: reviewer.id,
+      reviewedByName: reviewer.name,
+      reviewedAt: new Date().toISOString(),
+      remarks: remarks?.trim()
+    };
+    this.cache();
+    this.persistRows('employee_change_requests', [this.changeRequests[idx]], ['id']);
+
+    this.addNotification({
+      userId: request.requestedBy,
+      title: 'Change request rejected',
+      message: `Your changes to ${request.employeeName} (${request.summary}) were rejected by ${reviewer.name}${remarks ? ` — ${remarks}` : ''}.`,
+      type: 'APPROVAL',
+      link: '/approvals'
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('hrms-approvals-updated'));
+    }
+    return this.changeRequests[idx];
+  }
+
+  createDepotWithTemplate(input: {
+    name: string;
+    code: string;
+    manager: string;
+    managerPhone: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+  }, templateBranchId?: string): Branch {
+    this.ensureData();
+    const maxNum = this.branches.reduce((max, b) => {
+      const m = b.id.match(/^depot-(\d+)$/);
+      return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const newId = `depot-${String(maxNum + 1).padStart(3, '0')}`;
+
+    const template = templateBranchId ? this.branches.find(b => b.id === templateBranchId) : undefined;
+
+    const newBranch: Branch = {
+      id: newId,
+      name: input.name.trim(),
+      code: input.code.trim().toUpperCase(),
+      manager: input.manager.trim(),
+      managerPhone: input.managerPhone.trim(),
+      address: input.address.trim(),
+      city: input.city.trim(),
+      state: input.state.trim(),
+      pincode: input.pincode.trim(),
+      incentiveType: template?.incentiveType || 'FIXED',
+      incentiveValue: template?.incentiveValue || 2000,
+      driverMonthlyIncentive: template?.driverMonthlyIncentive || 2000,
+      incentiveTiers: template?.incentiveTiers ? template.incentiveTiers.map(t => ({ ...t, id: `tier-${Date.now()}-${t.id}` })) : [
+        { id: 'tier-1', minDays: 24, maxDays: 25, amount: 2000 },
+        { id: 'tier-2', minDays: 26, maxDays: 30, amount: 3000 }
+      ],
+      hourlyOvertimeRate: template?.hourlyOvertimeRate || 50,
+      fullDayOvertimeRate: template?.fullDayOvertimeRate || 300,
+      isActive: true,
+      subDepots: [],
+      createdAt: new Date().toISOString()
+    };
+    this.branches.push(newBranch);
+
+    const newSubDepots: SubDepot[] = [
+      {
+        id: `${newId}-staff`,
+        depotId: newId,
+        name: 'Office Staff',
+        code: `${newBranch.code}-S`,
+        category: 'STAFF',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: `${newId}-drivers`,
+        depotId: newId,
+        name: 'Drivers',
+        code: `${newBranch.code}-D`,
+        category: 'DRIVERS',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      }
+    ];
+    this.subDepots.push(...newSubDepots);
+
+    if (template) {
+      const templateEmployees = this.employees.filter(e => e.branchId === template.id && e.status === 'ACTIVE');
+      const now = new Date().toISOString();
+      const today = now.split('T')[0];
+      const baseNum = this.employees.length + 1000;
+      const copied: Employee[] = templateEmployees.map((e, i) => {
+        const num = baseNum + i;
+        return {
+          id: `emp-${now.replace(/\D/g, '').slice(0, 12)}-${i}`,
+          employeeId: `MBPL${String(num).padStart(5, '0')}`,
+          masterEmployeeId: `MBPL${String(num).padStart(5, '0')}`,
+          name: e.name,
+          email: null as any,
+          phone: null as any,
+          department: e.department,
+          designation: e.designation,
+          branchId: newId,
+          subDepotCategory: e.subDepotCategory,
+          busCategory: e.busCategory ?? null,
+          salary: e.salary,
+          pfEnabled: e.pfEnabled,
+          pfRegistrationStatus: e.pfRegistrationStatus,
+          pfUanNumber: null as any,
+          pfMemberId: null as any,
+          esicEnabled: e.esicEnabled,
+          esicRegistrationStatus: e.esicRegistrationStatus,
+          esicNumber: null as any,
+          bankAccount: null as any,
+          ifscCode: e.ifscCode,
+          bankName: e.bankName ?? null,
+          panNumber: null as any,
+          aadharNumber: null as any,
+          joiningDate: today,
+          status: 'ACTIVE',
+          photoUrl: e.photoUrl ?? null,
+          address: e.address,
+          city: e.city ?? null,
+          state: e.state ?? null,
+          pincode: e.pincode ?? null,
+          emergencyContact: e.emergencyContact,
+          emergencyPhone: e.emergencyPhone,
+          dateOfBirth: e.dateOfBirth,
+          gender: e.gender,
+          documents: e.documents || {},
+          transferHistory: null as any,
+          baseDepotId: newId,
+          createdAt: now,
+          updatedAt: now
+        } as Employee;
+      });
+      this.employees.push(...copied);
+      this.persistRows('employees', copied, ['id']);
+    }
+
+    this.cache();
+    this.persistRows('branches', [newBranch], ['id']);
+    this.persistRows('subdepots', newSubDepots, ['id']);
+    return newBranch;
+  }
+
   getAttendance(employeeId?: string, month?: number, year?: number): Attendance | Record<string, AttendanceRecord> {
     this.ensureData();
     if (employeeId) {
@@ -889,10 +1227,12 @@ class DataService {
     this.auditLogs = [];
     this.overtimeEntries = [];
     this.assignments = [];
+    this.changeRequests = [];
+    this.notifications = [];
     this.users = this.generateDefaultUsers();
     this.settings = { ...DEFAULT_SETTINGS };
     this.cache();
-    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs', 'branches', 'employees', 'subdepots', 'hrms_users'].forEach(t => this.clearTable(t));
+    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs', 'branches', 'employees', 'subdepots', 'hrms_users', 'employee_change_requests', 'notifications'].forEach(t => this.clearTable(t));
     this.persistRows('branches', this.branches, ['id']);
     this.persistRows('employees', this.employees, ['id']);
     this.persistRows('subdepots', this.subDepots, ['id']);

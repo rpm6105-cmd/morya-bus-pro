@@ -69,12 +69,12 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteEmployee = (id: string) => {
     if (role !== 'ADMIN') {
-      toast.error('HR cannot delete employees');
+      toast.error('HR cannot terminate employees');
       return;
     }
-    dataService.deleteEmployee(id);
+    dataService.terminateEmployee(id);
     setEmployees(dataService.getEmployees());
-    toast.success('Employee removed');
+    toast.success('Employee marked as Terminated (data retained)');
   };
 
   const updateBranch = (branch: Branch) => {
