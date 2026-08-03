@@ -13,6 +13,31 @@ import toast from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
+let payslipFontsLoaded = false;
+let payslipFontRegB64 = '';
+let payslipFontBoldB64 = '';
+const loadPayslipFonts = async () => {
+  if (payslipFontsLoaded) return;
+  const toBase64 = (buf: ArrayBuffer) => {
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  };
+  const fetchFont = async (file: string) => {
+    const res = await fetch(`/fonts/${file}`);
+    return toBase64(await res.arrayBuffer());
+  };
+  [payslipFontRegB64, payslipFontBoldB64] = await Promise.all([fetchFont('NotoSans-Regular.ttf'), fetchFont('NotoSans-Bold.ttf')]);
+  payslipFontsLoaded = true;
+};
+const registerPayslipFonts = (doc: jsPDF) => {
+  doc.addFileToVFS('NotoSans-Regular.ttf', payslipFontRegB64);
+  doc.addFont('NotoSans-Regular.ttf', 'Noto', 'normal');
+  doc.addFileToVFS('NotoSans-Bold.ttf', payslipFontBoldB64);
+  doc.addFont('NotoSans-Bold.ttf', 'Noto', 'bold');
+};
+
 export default function PayrollPage() {
   const { user, isAdmin } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -155,14 +180,18 @@ export default function PayrollPage() {
     });
   };
 
-  const generatePayslip = (entry: PayrollEntry) => {
+  const generatePayslip = async (entry: PayrollEntry) => {
     const emp = employees.find(e => e.id === entry.employeeId);
     const branch = dataService.getBranchById(emp?.branchId || '');
     if (!emp) return;
     const calc = getCalcForEntry(entry);
     if (!calc) return;
 
+    await loadPayslipFonts();
+
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    registerPayslipFonts(doc);
+    doc.setFont('Noto', 'normal');
     const W = doc.internal.pageSize.getWidth();
     const M = 15;
     const innerW = W - M * 2;
@@ -194,7 +223,7 @@ export default function PayrollPage() {
       doc.rect(x, y, w, h, 'S');
       doc.setTextColor(...(opts.color || DARK));
       doc.setFontSize(opts.size || 9);
-      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setFont('Noto', opts.bold ? 'bold' : 'normal');
       doc.text(text, opts.align === 'right' ? x + w - 5 : x + 5, y + h / 2 + 1.5, { align: opts.align || 'left' });
     };
 
@@ -205,21 +234,21 @@ export default function PayrollPage() {
     doc.circle(M + 9, 17, 9, 'F');
     doc.setTextColor(...NAVY);
     doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Noto', 'bold');
     doc.text('MB', M + 9, 20, { align: 'center' });
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Noto', 'bold');
     doc.text('MORYA BUS SERVICES', M + 23, 14);
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Noto', 'normal');
     doc.text(branch ? `${branch.name}, ${branch.city}, ${branch.state}` : 'Morya Bus Services', M + 23, 21);
     doc.text('www.moryabuses.com', M + 23, 27);
     doc.setFontSize(26);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Noto', 'bold');
     doc.text('PAY SLIP', W - M, 17, { align: 'right' });
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Noto', 'normal');
     doc.text(`Salary Month : ${selectedMonth} ${selectedYear}`, W - M, 25, { align: 'right' });
 
     // Employee details grid
@@ -303,13 +332,13 @@ export default function PayrollPage() {
     doc.roundedRect(M, y, innerW, 26, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Noto', 'bold');
     doc.text('NET PAY', M + 10, y + 11);
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Noto', 'normal');
     doc.text(`Rupees ${numberToWords(calc.netSalary)} Only`, M + 10, y + 19);
     doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Noto', 'bold');
     doc.text(`₹${calc.netSalary.toLocaleString()}`, W - M - 10, y + 15, { align: 'right' });
     y += 26 + 22;
 
@@ -321,7 +350,7 @@ export default function PayrollPage() {
     doc.setLineWidth(0.2);
     doc.setTextColor(...GRAY);
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Noto', 'normal');
     doc.text('Employer Signature', W / 2 - 30, y + 20, { align: 'center' });
     doc.text('Employee Signature', W / 2 + 30, y + 20, { align: 'center' });
 
