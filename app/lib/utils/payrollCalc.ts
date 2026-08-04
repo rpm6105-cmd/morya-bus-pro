@@ -1,4 +1,4 @@
-import { Employee, Branch, AttendanceRecord, OvertimeEntry, SystemSettings } from '../types';
+import { Employee, AttendanceRecord, OvertimeEntry, SystemSettings, SalaryMaster, PayrollDeductionOverride } from '../types';
 import { calculateTieredIncentive } from './incentive';
 
 export interface AttendanceSummary {
@@ -8,17 +8,24 @@ export interface AttendanceSummary {
   holidayDays: number;
   weekOffDays: number;
   lopDays: number;
+  totalDays: number;
 }
 
 export interface PayrollCalcResult {
   fullBasic: number;
+  fullDa: number;
   fullHra: number;
   fullConveyance: number;
+  fullWashing: number;
+  fullMedical: number;
   fullAllowances: number;
   fullGross: number;
   earnedBasic: number;
+  earnedDa: number;
   earnedHra: number;
   earnedConveyance: number;
+  earnedWashing: number;
+  earnedMedical: number;
   earnedAllowances: number;
   earnedGross: number;
   presentDays: number;
@@ -27,11 +34,14 @@ export interface PayrollCalcResult {
   weekOffDays: number;
   absentDays: number;
   lopDays: number;
+  totalDays: number;
   daysInMonth: number;
   effectiveDays: number;
+  perDaySalary: number;
   overtimeHours: number;
   overtimeDays: number;
   overtimeAmount: number;
+  foodIncentive: number;
   driverIncentive: number;
   incentive: number;
   totalEarnings: number;
@@ -40,14 +50,21 @@ export interface PayrollCalcResult {
   esicDeduction: number;
   tdsDeduction: number;
   ptDeduction: number;
+  mlwfDeduction: number;
   otherDeductions: number;
+  refundAmount: number;
   totalDeductions: number;
   netSalary: number;
-  perDaySalary: number;
 }
 
 const round = (n: number) => Math.round(Number(n || 0) * 100) / 100;
-const ceil = (n: number) => Math.ceil(Number(n || 0));
+const ceil2 = (n: number) => Math.ceil(Number(n || 0) * 100) / 100;
+
+export const DEFAULT_PER_DAY_DIVISOR = 30;
+export const DEFAULT_OT_RATE = 86;
+export const STAFF_OT_RATE = 108.33;
+export const MLWF_AMOUNT = 25;
+export const FOOD_INCENTIVE_PER_DAY = 100;
 
 export function splitSalary(salary: number) {
   const basic = Math.round(salary * 0.5);
@@ -74,7 +91,7 @@ export function summarizeAttendance(
     if (d.getMonth() + 1 !== month || d.getFullYear() !== year) return;
     switch (record.status) {
       case 'P': presentDays++; break;
-      case 'A': absentDays++; lopDays++; break;
+      case 'A': absentDays++; break;
       case 'LOP': lopDays++; break;
       case 'PL': paidLeaveDays++; break;
       case 'H': holidayDays++; break;
@@ -82,12 +99,15 @@ export function summarizeAttendance(
     }
   });
 
-  return { presentDays, absentDays, paidLeaveDays, holidayDays, weekOffDays, lopDays };
+  const totalDays = presentDays + paidLeaveDays + holidayDays + weekOffDays;
+
+  return { presentDays, absentDays, paidLeaveDays, holidayDays, weekOffDays, lopDays, totalDays };
 }
 
 export function calculateOvertimeAmount(
   overtimeEntries: OvertimeEntry[],
-  settings: SystemSettings
+  settings: SystemSettings,
+  perDaySalary: number
 ): { hours: number; days: number; amount: number } {
   let hours = 0;
   let days = 0;
@@ -101,33 +121,23 @@ export function calculateOvertimeAmount(
         amount += ot.amount || (ot.hours * (ot.rate || settings.overtimeSettings.hourlyRate));
       } else if (ot.type === 'FULL_DAY') {
         days++;
-        amount += ot.amount || (ot.rate || settings.overtimeSettings.fullDayRate);
+        amount += ot.amount || (ot.rate || perDaySalary);
       }
     });
 
   return { hours, days, amount: round(amount) };
 }
 
-export function calculatePF(pfEnabled: boolean, fullBasic: number, earnedBasic: number): number {
+export function calculatePF(pfEnabled: boolean, earnedBasic: number): number {
   if (!pfEnabled || earnedBasic <= 0) return 0;
-  if (fullBasic < 15000) return Math.round(earnedBasic * 0.12);
-  if (earnedBasic < 12000) return Math.round(earnedBasic * 0.12);
-  return 1800;
+  if (earnedBasic >= 15000) return 1800;
+  return Math.round(earnedBasic * 0.12);
 }
 
-export function calculateESIC(
-  esicEnabled: boolean,
-  salary: number,
-  fullConveyance: number,
-  earnedGross: number
-): number {
-  if (!esicEnabled) return 0;
-  const fixedWage = salary - fullConveyance;
-  if (fixedWage > 21000) return 0;
-  const earnedConveyance = salary > 0 ? (fullConveyance / salary) * earnedGross : 0;
-  const esicWage = Math.max(0, earnedGross - earnedConveyance);
-  if (esicWage <= 0) return 0;
-  return ceil(esicWage * 0.0075);
+export function calculateESIC(esicEnabled: boolean, earnedBasic: number): number {
+  if (!esicEnabled || earnedBasic <= 0) return 0;
+  if (earnedBasic > 21000) return 0;
+  return ceil2(earnedBasic * 0.0075);
 }
 
 export function calculatePT(gross: number, month: number, gender: string): number {
@@ -144,53 +154,63 @@ export function calculatePT(gross: number, month: number, gender: string): numbe
 
 export interface PayrollInput {
   employee: Employee;
-  branch?: Branch;
+  salaryMaster?: SalaryMaster | null;
+  branch?: any;
   attendanceRecords: Record<string, AttendanceRecord>;
   overtimeEntries?: OvertimeEntry[];
   settings: SystemSettings;
   month: number;
   year: number;
+  deductions?: PayrollDeductionOverride;
+  foodIncentive?: number;
 }
 
 export function calculatePayroll({
   employee,
+  salaryMaster,
   branch,
   attendanceRecords,
   overtimeEntries = [],
   settings,
   month,
   year,
+  deductions,
+  foodIncentive,
 }: PayrollInput): PayrollCalcResult {
-  const salary = employee.salary;
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const perDaySalary = salary / daysInMonth;
-
   const summary = summarizeAttendance(attendanceRecords, month, year);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const divisor = salaryMaster?.perDayDivisor || DEFAULT_PER_DAY_DIVISOR;
+  const totalDays = salaryMaster ? summary.totalDays : Math.max(0, daysInMonth - summary.lopDays);
 
-  const split = splitSalary(salary);
+  const full = {
+    basic: salaryMaster?.basic || 0,
+    da: salaryMaster?.da || 0,
+    hra: salaryMaster?.hra || 0,
+    conveyance: salaryMaster?.conveyance || 0,
+    washing: salaryMaster?.washing || 0,
+    medical: salaryMaster?.medical || 0,
+    other: salaryMaster?.otherAllowance || 0,
+    gross: salaryMaster?.gross || employee.salary || 0,
+  };
 
-  let effectiveDays = daysInMonth;
-  let proRataDeduction = 0;
-  if (employee.joiningDate) {
-    const joining = new Date(employee.joiningDate);
-    const joiningMonth = joining.getMonth() + 1;
-    const joiningYear = joining.getFullYear();
-    if (joiningYear === year && joiningMonth === month) {
-      effectiveDays = daysInMonth - joining.getDate() + 1;
-      proRataDeduction = perDaySalary * (daysInMonth - effectiveDays);
-    }
-  }
+  const perDaySalary = divisor > 0 ? full.gross / divisor : 0;
+  const ratio = divisor > 0 ? totalDays / divisor : 0;
 
-  const lopDeduction = perDaySalary * summary.lopDays;
-  const earnedGross = Math.max(0, salary - lopDeduction - proRataDeduction);
+  const earned = {
+    basic: Math.round(full.basic * ratio),
+    da: Math.round(full.da * ratio),
+    hra: Math.round(full.hra * ratio),
+    conveyance: Math.round(full.conveyance * ratio),
+    washing: Math.round(full.washing * ratio),
+    medical: Math.round(full.medical * ratio),
+    other: Math.round(full.other * ratio),
+  };
+  const earnedGross = earned.basic + earned.da + earned.hra + earned.conveyance + earned.washing + earned.medical + earned.other;
 
-  const ratio = salary > 0 ? earnedGross / salary : 0;
-  const earnedBasic = Math.round(split.basic * ratio);
-  const earnedHra = Math.round(split.hra * ratio);
-  const earnedConveyance = Math.round(split.conveyance * ratio);
-  const earnedAllowances = Math.round(split.allowances * ratio);
-
-  const ot = calculateOvertimeAmount(overtimeEntries, settings);
+  const ot = calculateOvertimeAmount(overtimeEntries, settings, perDaySalary);
+  const extraDays = ot.days;
+  const food = foodIncentive !== undefined ? foodIncentive : (extraDays * FOOD_INCENTIVE_PER_DAY);
+  const otRate = salaryMaster?.otRatePerHour || (employee.subDepotCategory === 'STAFF' ? STAFF_OT_RATE : DEFAULT_OT_RATE);
 
   const driverIncentive = employee.subDepotCategory === 'DRIVERS'
     ? calculateTieredIncentive(branch, summary.presentDays, 'DRIVERS')
@@ -198,59 +218,68 @@ export function calculatePayroll({
   const incentive = employee.subDepotCategory === 'DRIVERS'
     ? 0
     : (branch?.incentiveType === 'PERCENTAGE'
-        ? Math.round(salary * ((branch?.incentiveValue || 0) / 100))
+        ? Math.round(full.gross * ((branch?.incentiveValue || 0) / 100))
         : (branch?.incentiveValue || 0));
 
-  const totalEarnings = Math.round(earnedGross + ot.amount + driverIncentive + incentive);
+  const totalEarnings = Math.round(earnedGross + ot.amount + food + driverIncentive + incentive);
 
   const pfEnabled = employee.pfEnabled && employee.pfRegistrationStatus === 'COMPLETED';
-  const pfDeduction = calculatePF(pfEnabled, split.basic, earnedBasic);
-
   const esicEnabled = employee.esicEnabled && employee.esicRegistrationStatus === 'COMPLETED';
-  const esicDeduction = calculateESIC(esicEnabled, salary, split.conveyance, totalEarnings);
 
-  const tdsDeduction = salary * 12 > settings.tdsThreshold
-    ? Math.round(totalEarnings * (settings.tdsRate / 100))
-    : 0;
+  const pfDeduction = deductions ? deductions.pf : calculatePF(pfEnabled, earned.basic);
+  const esicDeduction = deductions ? deductions.esic : calculateESIC(esicEnabled, earned.basic);
+  const ptDeduction = deductions ? deductions.pt : calculatePT(totalEarnings, month, employee.gender);
+  const mlwfDeduction = deductions ? deductions.mlwf : (pfEnabled ? MLWF_AMOUNT : 0);
+  const otherDeductions = deductions ? deductions.other : 0;
+  const refundAmount = deductions ? deductions.refund : 0;
+  const tdsDeduction = 0;
 
-  const ptDeduction = calculatePT(totalEarnings, month, employee.gender);
-
-  const totalDeductions = pfDeduction + esicDeduction + tdsDeduction + ptDeduction + Math.round(lopDeduction);
-  const netSalary = Math.round(totalEarnings - totalDeductions);
+  const totalDeductions = pfDeduction + esicDeduction + tdsDeduction + ptDeduction + mlwfDeduction + otherDeductions;
+  const netSalary = Math.round(totalEarnings - totalDeductions + refundAmount);
 
   return {
-    fullBasic: split.basic,
-    fullHra: split.hra,
-    fullConveyance: split.conveyance,
-    fullAllowances: split.allowances,
-    fullGross: split.gross,
-    earnedBasic,
-    earnedHra,
-    earnedConveyance,
-    earnedAllowances,
-    earnedGross: Math.round(earnedGross),
+    fullBasic: full.basic,
+    fullDa: full.da,
+    fullHra: full.hra,
+    fullConveyance: full.conveyance,
+    fullWashing: full.washing,
+    fullMedical: full.medical,
+    fullAllowances: full.other,
+    fullGross: full.gross,
+    earnedBasic: earned.basic,
+    earnedDa: earned.da,
+    earnedHra: earned.hra,
+    earnedConveyance: earned.conveyance,
+    earnedWashing: earned.washing,
+    earnedMedical: earned.medical,
+    earnedAllowances: earned.other,
+    earnedGross,
     presentDays: summary.presentDays,
     paidLeaveDays: summary.paidLeaveDays,
     holidayDays: summary.holidayDays,
     weekOffDays: summary.weekOffDays,
     absentDays: summary.absentDays,
     lopDays: summary.lopDays,
+    totalDays,
     daysInMonth,
-    effectiveDays,
+    effectiveDays: daysInMonth,
+    perDaySalary: round(perDaySalary),
     overtimeHours: ot.hours,
-    overtimeDays: ot.days,
+    overtimeDays: extraDays,
     overtimeAmount: ot.amount,
+    foodIncentive: food,
     driverIncentive,
     incentive,
     totalEarnings,
-    lopDeduction: Math.round(lopDeduction),
+    lopDeduction: 0,
     pfDeduction,
     esicDeduction,
     tdsDeduction,
     ptDeduction,
-    otherDeductions: 0,
+    mlwfDeduction,
+    otherDeductions,
+    refundAmount,
     totalDeductions,
     netSalary,
-    perDaySalary: round(perDaySalary),
   };
 }

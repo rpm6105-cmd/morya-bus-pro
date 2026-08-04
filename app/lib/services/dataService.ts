@@ -4,7 +4,7 @@ import {
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
   IncentiveTier, User, EmployeeChangeRequest, AppNotification, NotificationType,
-  ChangeRequestAction, SalaryMaster, BankMaster, Designation
+  ChangeRequestAction, SalaryMaster, BankMaster, Designation, PayrollDeductionOverride, AttendanceStatus
 } from '../types';
 import { normalizeAadhaar } from '../utils/incentive';
 import { calculatePayroll as payrollCalc } from '../utils/payrollCalc';
@@ -1339,26 +1339,33 @@ class DataService {
     }
   }
 
-  calculatePayroll(employee: Employee, month: number, year: number) {
+  calculatePayroll(employee: Employee, month: number, year: number, deductions?: PayrollDeductionOverride, foodIncentive?: number) {
     this.ensureData();
     const branch = this.getBranchById(employee.branchId);
     const settings = this.getSettings();
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+    const salaryMaster = this.getSalaryMasterForEmployee(employee.id, monthKey);
     const attendanceRecords = this.getAttendance(employee.id, month, year) as Record<string, AttendanceRecord>;
     const overtimeEntries = this.getOvertime(employee.id, month, year);
     const calc = payrollCalc({
       employee,
+      salaryMaster,
       branch,
       attendanceRecords,
       overtimeEntries,
       settings,
       month,
       year,
+      deductions,
+      foodIncentive,
     });
 
     return {
       basicSalary: calc.fullBasic,
       hra: calc.fullHra,
       conveyance: calc.fullConveyance,
+      washing: calc.fullWashing,
+      medical: calc.fullMedical,
       otherAllowances: calc.fullAllowances,
       grossSalary: calc.fullGross,
       presentDays: calc.presentDays,
@@ -1367,11 +1374,15 @@ class DataService {
       weekOffDays: calc.weekOffDays,
       absentDays: calc.absentDays,
       lopDays: calc.lopDays,
+      totalDays: calc.totalDays,
+      extraDays: calc.overtimeDays,
+      perDay: calc.perDaySalary,
       lopDeduction: calc.lopDeduction,
       overtimeHours: calc.overtimeHours,
       overtimeDays: calc.overtimeDays,
       overtimeType: calc.overtimeHours > 0 ? 'HOURLY' : calc.overtimeDays > 0 ? 'FULL_DAY' : undefined,
       overtimeAmount: calc.overtimeAmount,
+      foodIncentive: calc.foodIncentive,
       driverIncentive: calc.driverIncentive,
       incentive: calc.incentive,
       totalEarnings: calc.totalEarnings,
@@ -1379,7 +1390,9 @@ class DataService {
       esicDeduction: calc.esicDeduction,
       tdsDeduction: calc.tdsDeduction,
       ptDeduction: calc.ptDeduction,
-      otherDeductions: 0,
+      mlwfDeduction: calc.mlwfDeduction,
+      otherDeductions: calc.otherDeductions,
+      refundAmount: calc.refundAmount,
       totalDeductions: calc.totalDeductions,
       netSalary: calc.netSalary,
       earnedBasic: calc.earnedBasic,
@@ -1388,6 +1401,95 @@ class DataService {
       earnedAllowances: calc.earnedAllowances,
       earnedGross: calc.earnedGross,
     };
+  }
+
+  generateAttendanceMonth(month: number, year: number, employees: Employee[]): { created: number; skipped: number } {
+    this.ensureData();
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let created = 0;
+    let skipped = 0;
+    for (const emp of employees || this.employees) {
+      if (emp.status !== 'ACTIVE') { skipped++; continue; }
+      const existing = this.attendance[emp.id] || {};
+      const monthKeyPrefix = `${year}-${String(month).padStart(2, '0')}`;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (!existing[date]) {
+          const dayOfWeek = new Date(year, month - 1, d).getDay();
+          existing[date] = {
+            employeeId: emp.id,
+            date,
+            status: dayOfWeek === 0 ? 'WO' : 'P',
+            isPaid: 'PAID',
+            depotId: emp.branchId,
+          };
+          created++;
+        }
+      }
+      this.attendance[emp.id] = existing;
+    }
+    this.cache();
+    const rows: any[] = [];
+    for (const emp of (employees || this.employees)) {
+      const recs = this.attendance[emp.id] || {};
+      Object.values(recs).forEach((r: any) => {
+        if (String(r.date).startsWith(`${year}-${String(month).padStart(2, '0')}`)) rows.push({ ...r, employeeId: emp.id });
+      });
+    }
+    for (let i = 0; i < rows.length; i += 500) {
+      this.persistRows('attendance', rows.slice(i, i + 500), ['employeeId', 'date']);
+    }
+    return { created, skipped };
+  }
+
+  importAttendance(records: Array<{ employeeId: string; date: string; status: AttendanceStatus; isPaid?: boolean }>): number {
+    this.ensureData();
+    const rows = records.map(r => {
+      const emp = this.employees.find(e => e.id === r.employeeId);
+      const paid = r.isPaid !== undefined ? (r.isPaid ? 'PAID' : 'UNPAID') : (['P', 'PL', 'H'].includes(r.status) ? 'PAID' : 'UNPAID');
+      const rec: AttendanceRecord = { employeeId: r.employeeId, date: r.date, status: r.status, isPaid: paid, depotId: emp?.branchId };
+      if (!this.attendance[r.employeeId]) this.attendance[r.employeeId] = {};
+      this.attendance[r.employeeId][r.date] = rec;
+      return rec;
+    });
+    this.cache();
+    for (let i = 0; i < rows.length; i += 500) {
+      this.persistRows('attendance', rows.slice(i, i + 500), ['employeeId', 'date']);
+    }
+    return rows.length;
+  }
+
+  approvePayroll(id: string, approvedBy: string): PayrollEntry | null {
+    this.ensureData();
+    const index = this.payroll.findIndex(p => p.id === id);
+    if (index === -1) return null;
+    const now = new Date().toISOString();
+    this.payroll[index] = {
+      ...this.payroll[index],
+      status: 'APPROVED',
+      approvedBy,
+      approvedAt: now,
+    };
+    this.cache();
+    this.persistRows('payroll', [this.payroll[index]], ['id']);
+    this.notifyPayrollChanged();
+    return this.payroll[index];
+  }
+
+  markPayrollPaid(id: string): PayrollEntry | null {
+    this.ensureData();
+    const index = this.payroll.findIndex(p => p.id === id);
+    if (index === -1) return null;
+    const now = new Date().toISOString();
+    this.payroll[index] = {
+      ...this.payroll[index],
+      status: 'PAID',
+      paidAt: now,
+    };
+    this.cache();
+    this.persistRows('payroll', [this.payroll[index]], ['id']);
+    this.notifyPayrollChanged();
+    return this.payroll[index];
   }
 
   private getWorkingDays(year: number, month: number): number {

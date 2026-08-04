@@ -149,6 +149,25 @@ export default function AttendancePage() {
     toast.success(`Marked as ${ATTENDANCE_STATUS_MAP[newStatus].label}`);
   };
 
+  const autoGenerate = () => {
+    if (payrollLocked) {
+      toast.error('Attendance is locked. Payroll has already been processed for this month.');
+      return;
+    }
+    const active = filteredEmployees.filter(e => e.status === 'ACTIVE');
+    if (active.length === 0) {
+      toast.error('No active employees found for the current filters.');
+      return;
+    }
+    const ok = confirm(
+      `Generate default attendance for ${active.length} employees for ${format(currentDate, 'MMMM yyyy')}?\n\n• Weekdays → Present (P)\n• Sundays → Week Off (WO)\n\nOnly unmarked dates will be filled.`
+    );
+    if (!ok) return;
+    const res = dataService.generateAttendanceMonth(selectedMonth, selectedYear, active);
+    loadData();
+    toast.success(`Auto-generated ${res.created} day-records for ${active.length} employees`);
+  };
+
   const handleBulkUpdate = () => {
     if (payrollLocked) {
       toast.error('Attendance is locked. Payroll has already been processed for this month.');
@@ -273,6 +292,10 @@ export default function AttendancePage() {
               <ChevronRight size={18} color="#475569" />
             </button>
           </div>
+          <button onClick={autoGenerate} style={payrollLocked ? { ...styles.actionBtnOutline, opacity: 0.5, cursor: 'not-allowed' } : styles.actionBtnOutline} disabled={payrollLocked}>
+            <Calendar size={16} />
+            Auto-Generate
+          </button>
           <button onClick={() => setShowBulkModal(true)} style={payrollLocked ? { ...styles.actionBtn, opacity: 0.5, cursor: 'not-allowed' } : styles.actionBtn} disabled={payrollLocked}>
             <Upload size={16} />
             Bulk Update

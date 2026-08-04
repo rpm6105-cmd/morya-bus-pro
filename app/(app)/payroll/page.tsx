@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { Employee, PayrollEntry, OvertimeType } from '../../lib/types';
-import { calculatePayroll as calcPayroll } from '../../lib/utils/payrollCalc';
 import {
   Calculator, Download, DollarSign, Users, TrendingUp,
   ChevronLeft, ChevronRight, FileText, Printer, CreditCard, Clock, ShieldAlert
@@ -49,6 +48,8 @@ export default function PayrollPage() {
   const [processing, setProcessing] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
   const [showPayslip, setShowPayslip] = useState(false);
+  const [deductionEntry, setDeductionEntry] = useState<PayrollEntry | null>(null);
+  const [deductionValues, setDeductionValues] = useState<{ pf: number; esic: number; pt: number; mlwf: number; other: number; refund: number }>({ pf: 0, esic: 0, pt: 0, mlwf: 0, other: 0, refund: 0 });
 
   const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth) + 1;
   const years = [2024, 2025, 2026];
@@ -67,49 +68,7 @@ export default function PayrollPage() {
   };
 
   const calculatePayroll = (emp: Employee) => {
-    const calc = calcPayroll({
-      employee: emp,
-      branch: dataService.getBranchById(emp.branchId),
-      attendanceRecords: dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>,
-      overtimeEntries: dataService.getOvertime(emp.id, monthIndex, selectedYear),
-      settings: dataService.getSettings(),
-      month: monthIndex,
-      year: selectedYear,
-    });
-
-    return {
-      basicSalary: calc.fullBasic,
-      hra: calc.fullHra,
-      conveyance: calc.fullConveyance,
-      otherAllowances: calc.fullAllowances,
-      grossSalary: calc.fullGross,
-      presentDays: calc.presentDays,
-      paidLeaveDays: calc.paidLeaveDays,
-      holidayDays: calc.holidayDays,
-      weekOffDays: calc.weekOffDays,
-      absentDays: calc.absentDays,
-      lopDays: calc.lopDays,
-      lopDeduction: calc.lopDeduction,
-      overtimeHours: calc.overtimeHours,
-      overtimeDays: calc.overtimeDays,
-      overtimeType: calc.overtimeHours > 0 ? 'HOURLY' : calc.overtimeDays > 0 ? 'FULL_DAY' : undefined,
-      overtimeAmount: calc.overtimeAmount,
-      driverIncentive: calc.driverIncentive,
-      incentive: calc.incentive,
-      totalEarnings: calc.totalEarnings,
-      pfDeduction: calc.pfDeduction,
-      esicDeduction: calc.esicDeduction,
-      tdsDeduction: calc.tdsDeduction,
-      ptDeduction: calc.ptDeduction,
-      otherDeductions: 0,
-      totalDeductions: calc.totalDeductions,
-      netSalary: calc.netSalary,
-      earnedBasic: calc.earnedBasic,
-      earnedHra: calc.earnedHra,
-      earnedConveyance: calc.earnedConveyance,
-      earnedAllowances: calc.earnedAllowances,
-      earnedGross: calc.earnedGross,
-    };
+    return dataService.calculatePayroll(emp, monthIndex, selectedYear) as any;
   };
 
   const processPayroll = async () => {
@@ -169,15 +128,21 @@ export default function PayrollPage() {
   const getCalcForEntry = (entry: PayrollEntry) => {
     const emp = employees.find(e => e.id === entry.employeeId);
     if (!emp) return null;
-    return calcPayroll({
-      employee: emp,
-      branch: dataService.getBranchById(emp.branchId),
-      attendanceRecords: dataService.getAttendance(emp.id, monthIndex, selectedYear) as Record<string, any>,
-      overtimeEntries: dataService.getOvertime(emp.id, monthIndex, selectedYear),
-      settings: dataService.getSettings(),
-      month: monthIndex,
-      year: selectedYear,
-    });
+    return dataService.calculatePayroll(emp, monthIndex, selectedYear) as any;
+  };
+
+  const reconcileEntry = (entry: PayrollEntry) => {
+    const calc = getCalcForEntry(entry);
+    if (!calc) return null;
+    const expectedNet = Math.round(
+      calc.earnedGross +
+      (entry.overtimeAmount || 0) +
+      (entry.foodIncentive || 0) -
+      (entry.totalDeductions || 0) +
+      (entry.refundAmount || 0)
+    );
+    const match = Math.abs(expectedNet - entry.netSalary) <= 1;
+    return { expectedNet, match, earnedGross: calc.earnedGross };
   };
 
   const generatePayslip = async (entry: PayrollEntry) => {
@@ -390,6 +355,50 @@ export default function PayrollPage() {
     totalNet: payrollEntries.reduce((sum, p) => sum + p.netSalary, 0)
   };
 
+  const reconciliation = (() => {
+    if (payrollEntries.length === 0) return null;
+    let matched = 0, total = 0;
+    for (const entry of payrollEntries) {
+      const r = reconcileEntry(entry);
+      if (!r) continue;
+      total++;
+      if (r.match) matched++;
+    }
+    return { matched, total };
+  })();
+
+  const openDeductionEditor = (entry: PayrollEntry) => {
+    setDeductionValues({
+      pf: entry.pfDeduction || 0,
+      esic: entry.esicDeduction || 0,
+      pt: entry.ptDeduction || 0,
+      mlwf: entry.mlwfDeduction || 0,
+      other: entry.otherDeductions || 0,
+      refund: entry.refundAmount || 0,
+    });
+    setDeductionEntry(entry);
+  };
+
+  const saveDeductions = () => {
+    if (!deductionEntry) return;
+    const v = deductionValues;
+    const totalDeductions = v.pf + v.esic + v.pt + v.mlwf + v.other;
+    const netSalary = Math.round((deductionEntry.totalEarnings || 0) - totalDeductions + v.refund);
+    dataService.updatePayroll(deductionEntry.id, {
+      pfDeduction: v.pf,
+      esicDeduction: v.esic,
+      ptDeduction: v.pt,
+      mlwfDeduction: v.mlwf,
+      otherDeductions: v.other,
+      refundAmount: v.refund,
+      totalDeductions,
+      netSalary,
+    });
+    setDeductionEntry(null);
+    toast.success('Deductions updated');
+    loadData();
+  };
+
   const chartData = employees.slice(0, 10).map(emp => {
     const entry = payrollEntries.find(p => p.employeeId === emp.id);
     return {
@@ -548,7 +557,18 @@ export default function PayrollPage() {
       <div style={styles.tableContainer}>
         <div style={styles.tableHeader}>
           <h3>Payroll Entries</h3>
-          <span style={styles.countBadge}>{payrollEntries.length} entries</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {reconciliation && (
+              <span style={{
+                ...styles.countBadge,
+                background: reconciliation.matched === reconciliation.total ? '#dcfce7' : '#fef3c7',
+                color: reconciliation.matched === reconciliation.total ? '#166534' : '#92400e'
+              }}>
+                Reconciled {reconciliation.matched}/{reconciliation.total}
+              </span>
+            )}
+            <span style={styles.countBadge}>{payrollEntries.length} entries</span>
+          </div>
         </div>
         <table style={styles.table}>
           <thead>
@@ -599,8 +619,8 @@ export default function PayrollPage() {
                   <td style={styles.td}>
                     <span style={{
                       ...styles.statusBadge,
-                      background: entry.status === 'PAID' ? '#dcfce7' : entry.status === 'APPROVED' ? '#dbeafe' : '#fef3c7',
-                      color: entry.status === 'PAID' ? '#166534' : entry.status === 'APPROVED' ? '#1e40af' : '#92400e'
+                      background: entry.status === 'PAID' ? '#dcfce7' : entry.status === 'APPROVED' ? '#dbeafe' : entry.status === 'PROCESSED' ? '#f3e8ff' : '#fef3c7',
+                      color: entry.status === 'PAID' ? '#166534' : entry.status === 'APPROVED' ? '#1e40af' : entry.status === 'PROCESSED' ? '#7e22ce' : '#92400e'
                     }}>
                       {entry.status}
                     </span>
@@ -613,6 +633,24 @@ export default function PayrollPage() {
                       <button onClick={() => { setSelectedEntry(entry); setShowPayslip(true); }} style={styles.actionBtn} title="View Details">
                         <Printer size={16} color="#3b82f6" />
                       </button>
+                      <button onClick={() => openDeductionEditor(entry)} style={styles.actionBtn} title="Edit Deductions">
+                        <Calculator size={16} color="#8b5cf6" />
+                      </button>
+                      {entry.status === 'DRAFT' || entry.status === 'PROCESSED' ? (
+                        <button onClick={() => {
+                          const e = dataService.approvePayroll(entry.id, user?.id || 'admin');
+                          if (e) { toast.success('Payroll approved'); loadData(); }
+                        }} style={styles.approveBtn} title="Approve">
+                          Approve
+                        </button>
+                      ) : entry.status === 'APPROVED' ? (
+                        <button onClick={() => {
+                          const e = dataService.markPayrollPaid(entry.id);
+                          if (e) { toast.success('Marked as paid'); loadData(); }
+                        }} style={styles.payBtn} title="Mark Paid">
+                          <CreditCard size={14} /> Pay
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -785,6 +823,54 @@ export default function PayrollPage() {
         </div>
         );
       })()}
+
+      {deductionEntry && (() => {
+        const emp = employees.find(e => e.id === deductionEntry.employeeId);
+        const numInput = (label: string, key: 'pf' | 'esic' | 'pt' | 'mlwf' | 'other' | 'refund') => (
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>{label}</label>
+            <input
+              type="number"
+              value={deductionValues[key]}
+              onChange={e => setDeductionValues({ ...deductionValues, [key]: Number(e.target.value) || 0 })}
+              style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}
+            />
+          </div>
+        );
+        const totalDed = deductionValues.pf + deductionValues.esic + deductionValues.pt + deductionValues.mlwf + deductionValues.other;
+        const newNet = Math.round((deductionEntry.totalEarnings || 0) - totalDed + deductionValues.refund);
+        return (
+          <div style={styles.modalOverlay} onClick={() => setDeductionEntry(null)}>
+            <div style={{ ...styles.modal, maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2>Edit Deductions</h2>
+                <button onClick={() => setDeductionEntry(null)} style={styles.closeBtn}>✕</button>
+              </div>
+              <div style={{ padding: '20px 24px' }}>
+                <p style={{ fontSize: '14px', color: '#0f172a', fontWeight: '600', margin: '0 0 4px' }}>{emp?.name}</p>
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 16px' }}>{emp?.employeeId} · Total Earnings ₹{Number(deductionEntry.totalEarnings || 0).toLocaleString()}</p>
+                {numInput('PF Deduction (₹)', 'pf')}
+                {numInput('ESIC Deduction (₹)', 'esic')}
+                {numInput('Professional Tax (₹)', 'pt')}
+                {numInput('MLWF (₹)', 'mlwf')}
+                {numInput('Other Deductions (₹)', 'other')}
+                {numInput('Refund (+) (₹)', 'refund')}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '8px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '14px', color: '#64748b' }}>Total Deductions</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#ef4444' }}>-₹{totalDed.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#ecfdf5', borderRadius: '8px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '14px', color: '#065f46', fontWeight: '600' }}>Net Salary</span>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#10b981' }}>₹{newNet.toLocaleString()}</span>
+                </div>
+              </div>
+              <div style={styles.modalFooter}>
+                <button onClick={saveDeductions} style={styles.downloadBtn}>Save Deductions</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -822,8 +908,10 @@ const styles: Record<string, React.CSSProperties> = {
   deduction: { color: '#ef4444' },
   netSalary: { fontWeight: '600', color: '#10b981' },
   statusBadge: { padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' },
-  actions: { display: 'flex', gap: '8px' },
+  actions: { display: 'flex', gap: '8px', alignItems: 'center' },
   actionBtn: { padding: '6px', background: 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  approveBtn: { padding: '6px 12px', background: '#dbeafe', color: '#1e40af', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' },
+  payBtn: { padding: '6px 12px', background: '#dcfce7', color: '#166534', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' },
   emptyState: { padding: '60px 20px', textAlign: 'center' },
   emptyBtn: { marginTop: '16px', padding: '10px 20px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },

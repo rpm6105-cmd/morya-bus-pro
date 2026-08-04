@@ -226,6 +226,8 @@ export interface PayrollEntry {
   basicSalary: number;
   hra: number;
   conveyance: number;
+  washing?: number;
+  medical?: number;
   otherAllowances: number;
   grossSalary: number;
   presentDays: number;
@@ -234,11 +236,15 @@ export interface PayrollEntry {
   weekOffDays: number;
   absentDays: number;
   lopDays: number;
+  totalDays?: number;
+  extraDays?: number;
+  perDay?: number;
   lopDeduction: number;
   overtimeHours?: number;
   overtimeDays?: number;
   overtimeType?: OvertimeType;
   overtimeAmount: number;
+  foodIncentive?: number;
   driverIncentive: number;
   incentive: number;
   totalEarnings: number;
@@ -246,7 +252,9 @@ export interface PayrollEntry {
   esicDeduction: number;
   tdsDeduction: number;
   ptDeduction: number;
+  mlwfDeduction?: number;
   otherDeductions: number;
+  refundAmount?: number;
   totalDeductions: number;
   netSalary: number;
   status: 'DRAFT' | 'PROCESSED' | 'APPROVED' | 'PAID';
@@ -255,6 +263,15 @@ export interface PayrollEntry {
   approvedBy?: string;
   approvedAt?: string;
   paidAt?: string;
+}
+
+export interface PayrollDeductionOverride {
+  pf: number;
+  esic: number;
+  pt: number;
+  mlwf: number;
+  other: number;
+  refund: number;
 }
 
 export interface LeaveRequest {
