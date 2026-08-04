@@ -254,6 +254,8 @@ export interface PayrollEntry {
   ptDeduction: number;
   mlwfDeduction?: number;
   otherDeductions: number;
+  loanDeduction?: number;
+  advanceDeduction?: number;
   refundAmount?: number;
   totalDeductions: number;
   netSalary: number;
@@ -272,6 +274,53 @@ export interface PayrollDeductionOverride {
   mlwf: number;
   other: number;
   refund: number;
+}
+
+export interface EmployeeLoan {
+  id: string;
+  employeeId: string;
+  loanDate: string;
+  totalAmount: number;
+  monthlyRecovery: number;
+  description?: string;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface LoanRecovery {
+  id: string;
+  loanId: string;
+  amount: number;
+  month: string;
+  year: number;
+  payrollId?: string;
+}
+
+export interface EmployeeAdvance {
+  id: string;
+  employeeId: string;
+  advanceDate: string;
+  totalAmount: number;
+  monthlyAdjustment: number;
+  description?: string;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface AdvanceAdjustment {
+  id: string;
+  advanceId: string;
+  amount: number;
+  month: string;
+  year: number;
+  payrollId?: string;
+}
+
+export interface LoanAdvanceSummary {
+  loanBalance: number;
+  loanMonthly: number;
+  advanceBalance: number;
+  advanceMonthly: number;
 }
 
 export interface LeaveRequest {

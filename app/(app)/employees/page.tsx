@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { dataService } from '../../lib/services/dataService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { Employee, Branch, EmployeeAssignment } from '../../lib/types';
+import { Employee, Branch, EmployeeAssignment, EmployeeLoan, EmployeeAdvance, LoanAdvanceSummary } from '../../lib/types';
 import {
   Search, Filter, Plus, ChevronDown, ChevronUp, Edit2, Trash2, 
   Eye, Download, X, User, Mail, Phone, MapPin, Calendar,
   Briefcase, Building2, CreditCard, FileText, Award, AlertTriangle,
-  ArrowLeftRight, History, ShieldCheck, Bus, UserX, UploadCloud, FileSpreadsheet
+  ArrowLeftRight, History, ShieldCheck, Bus, UserX, UploadCloud, FileSpreadsheet, HandCoins
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
@@ -89,6 +89,20 @@ export default function EmployeesPage() {
   const [transferDate, setTransferDate] = useState(new Date().toISOString().split('T')[0]);
   const [transferReason, setTransferReason] = useState('');
   const [stints, setStints] = useState<Employee[]>([]);
+
+  const [employeeLoans, setEmployeeLoans] = useState<EmployeeLoan[]>([]);
+  const [employeeAdvances, setEmployeeAdvances] = useState<EmployeeAdvance[]>([]);
+  const [loanAdvanceSummary, setLoanAdvanceSummary] = useState<LoanAdvanceSummary>({ loanBalance: 0, loanMonthly: 0, advanceBalance: 0, advanceMonthly: 0 });
+  const [showAddLoanForm, setShowAddLoanForm] = useState(false);
+  const [showAddAdvanceForm, setShowAddAdvanceForm] = useState(false);
+  const [loanAmount, setLoanAmount] = useState('');
+  const [loanMonthly, setLoanMonthly] = useState('');
+  const [loanDate, setLoanDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loanDesc, setLoanDesc] = useState('');
+  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [advanceMonthly, setAdvanceMonthly] = useState('');
+  const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [advanceDesc, setAdvanceDesc] = useState('');
 
   useEffect(() => {
     loadData();
@@ -174,7 +188,68 @@ export default function EmployeesPage() {
     setTransferToDepotId('');
     setTransferDate(new Date().toISOString().split('T')[0]);
     setTransferReason('');
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setEmployeeLoans(dataService.getLoans(emp.id));
+    setEmployeeAdvances(dataService.getAdvances(emp.id));
+    setLoanAdvanceSummary(dataService.getLoanAdvanceSummary(emp.id, monthKey));
+    setShowAddLoanForm(false);
+    setShowAddAdvanceForm(false);
   };
+
+  const handleAddLoan = () => {
+    if (!selectedEmployee) return;
+    const amount = Number(loanAmount);
+    const monthly = Number(loanMonthly);
+    if (!amount || amount <= 0) return toast.error('Enter a valid loan amount');
+    if (!monthly || monthly <= 0) return toast.error('Enter a valid monthly recovery');
+    dataService.addLoan({
+      employeeId: selectedEmployee.id,
+      loanDate,
+      totalAmount: amount,
+      monthlyRecovery: monthly,
+      description: loanDesc || undefined
+    });
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setEmployeeLoans(dataService.getLoans(selectedEmployee.id));
+    setLoanAdvanceSummary(dataService.getLoanAdvanceSummary(selectedEmployee.id, monthKey));
+    setShowAddLoanForm(false);
+    setLoanAmount('');
+    setLoanMonthly('');
+    setLoanDesc('');
+    toast.success('Loan added');
+  };
+
+  const handleAddAdvance = () => {
+    if (!selectedEmployee) return;
+    const amount = Number(advanceAmount);
+    const monthly = Number(advanceMonthly);
+    if (!amount || amount <= 0) return toast.error('Enter a valid advance amount');
+    if (!monthly || monthly <= 0) return toast.error('Enter a valid monthly adjustment');
+    dataService.addAdvance({
+      employeeId: selectedEmployee.id,
+      advanceDate,
+      totalAmount: amount,
+      monthlyAdjustment: monthly,
+      description: advanceDesc || undefined
+    });
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setEmployeeAdvances(dataService.getAdvances(selectedEmployee.id));
+    setLoanAdvanceSummary(dataService.getLoanAdvanceSummary(selectedEmployee.id, monthKey));
+    setShowAddAdvanceForm(false);
+    setAdvanceAmount('');
+    setAdvanceMonthly('');
+    setAdvanceDesc('');
+    toast.success('Advance added');
+  };
+
+  const loanBalance = (loan: EmployeeLoan) =>
+    Math.max(0, Number(loan.totalAmount || 0) - dataService.getLoanRecoveries(loan.id).reduce((s, r) => s + Number(r.amount || 0), 0));
+
+  const advanceBalance = (adv: EmployeeAdvance) =>
+    Math.max(0, Number(adv.totalAmount || 0) - dataService.getAdvanceAdjustments(adv.id).reduce((s, r) => s + Number(r.amount || 0), 0));
 
   const openAddModal = () => {
     setEditingEmployee(null);
@@ -1160,6 +1235,241 @@ export default function EmployeesPage() {
                     </table>
                   </div>
                 )}
+              </div>
+
+              <div style={{ ...styles.detailSection, borderTop: '1px solid #e2e8f0', marginTop: '16px', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={styles.sectionTitle}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <HandCoins size={14} color="#f59e0b" /> Loans &amp; Advances
+                    </span>
+                  </h4>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#92400e' }}>Loan Balance</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '16px', fontWeight: '700', color: '#b45309' }}>₹{loanAdvanceSummary.loanBalance.toLocaleString()}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#92400e' }}>Monthly recovery: ₹{loanAdvanceSummary.loanMonthly.toLocaleString()}</p>
+                  </div>
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#1e40af' }}>Advance Balance</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '16px', fontWeight: '700', color: '#1d4ed8' }}>₹{loanAdvanceSummary.advanceBalance.toLocaleString()}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#1e40af' }}>Monthly adjustment: ₹{loanAdvanceSummary.advanceMonthly.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: '#475569' }}>Loans</p>
+                    <button
+                      onClick={() => setShowAddLoanForm(!showAddLoanForm)}
+                      style={{
+                        background: showAddLoanForm ? '#f1f5f9' : '#f59e0b',
+                        color: showAddLoanForm ? '#334155' : 'white',
+                        border: 'none',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Plus size={12} />
+                      {showAddLoanForm ? 'Hide Form' : 'Add Loan'}
+                    </button>
+                  </div>
+                  {showAddLoanForm && (
+                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Loan Amount (₹)</label>
+                          <input
+                            type="number"
+                            value={loanAmount}
+                            onChange={e => setLoanAmount(e.target.value)}
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Monthly Recovery (₹)</label>
+                          <input
+                            type="number"
+                            value={loanMonthly}
+                            onChange={e => setLoanMonthly(e.target.value)}
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Loan Date</label>
+                          <input
+                            type="date"
+                            value={loanDate}
+                            onChange={e => setLoanDate(e.target.value)}
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Description</label>
+                          <input
+                            type="text"
+                            value={loanDesc}
+                            onChange={e => setLoanDesc(e.target.value)}
+                            placeholder="e.g. Vehicle repair advance"
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleAddLoan}
+                        style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginTop: '4px' }}
+                      >
+                        Save Loan
+                      </button>
+                    </div>
+                  )}
+                  {employeeLoans.length === 0 ? (
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No loans recorded</p>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                            <th style={{ padding: '6px 4px' }}>Date</th>
+                            <th style={{ padding: '6px 4px' }}>Amount</th>
+                            <th style={{ padding: '6px 4px' }}>Monthly</th>
+                            <th style={{ padding: '6px 4px' }}>Balance</th>
+                            <th style={{ padding: '6px 4px' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employeeLoans.map(loan => (
+                            <tr key={loan.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: loan.isActive === false ? 0.5 : 1 }}>
+                              <td style={{ padding: '6px 4px', color: '#475569' }}>{loan.loanDate}</td>
+                              <td style={{ padding: '6px 4px', fontWeight: '500' }}>₹{Number(loan.totalAmount || 0).toLocaleString()}</td>
+                              <td style={{ padding: '6px 4px' }}>₹{Number(loan.monthlyRecovery || 0).toLocaleString()}</td>
+                              <td style={{ padding: '6px 4px', fontWeight: '600', color: loanBalance(loan) > 0 ? '#b45309' : '#16a34a' }}>
+                                {loanBalance(loan) > 0 ? `₹${loanBalance(loan).toLocaleString()}` : 'Closed'}
+                              </td>
+                              <td style={{ padding: '6px 4px', color: '#64748b' }}>{loan.description || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: '600', color: '#475569' }}>Advances</p>
+                    <button
+                      onClick={() => setShowAddAdvanceForm(!showAddAdvanceForm)}
+                      style={{
+                        background: showAddAdvanceForm ? '#f1f5f9' : '#3b82f6',
+                        color: showAddAdvanceForm ? '#334155' : 'white',
+                        border: 'none',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Plus size={12} />
+                      {showAddAdvanceForm ? 'Hide Form' : 'Add Advance'}
+                    </button>
+                  </div>
+                  {showAddAdvanceForm && (
+                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Advance Amount (₹)</label>
+                          <input
+                            type="number"
+                            value={advanceAmount}
+                            onChange={e => setAdvanceAmount(e.target.value)}
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Monthly Adjustment (₹)</label>
+                          <input
+                            type="number"
+                            value={advanceMonthly}
+                            onChange={e => setAdvanceMonthly(e.target.value)}
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Advance Date</label>
+                          <input
+                            type="date"
+                            value={advanceDate}
+                            onChange={e => setAdvanceDate(e.target.value)}
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Description</label>
+                          <input
+                            type="text"
+                            value={advanceDesc}
+                            onChange={e => setAdvanceDesc(e.target.value)}
+                            placeholder="e.g. Salary advance"
+                            style={{ width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleAddAdvance}
+                        style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginTop: '4px' }}
+                      >
+                        Save Advance
+                      </button>
+                    </div>
+                  )}
+                  {employeeAdvances.length === 0 ? (
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No advances recorded</p>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                            <th style={{ padding: '6px 4px' }}>Date</th>
+                            <th style={{ padding: '6px 4px' }}>Amount</th>
+                            <th style={{ padding: '6px 4px' }}>Monthly</th>
+                            <th style={{ padding: '6px 4px' }}>Balance</th>
+                            <th style={{ padding: '6px 4px' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employeeAdvances.map(adv => (
+                            <tr key={adv.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: adv.isActive === false ? 0.5 : 1 }}>
+                              <td style={{ padding: '6px 4px', color: '#475569' }}>{adv.advanceDate}</td>
+                              <td style={{ padding: '6px 4px', fontWeight: '500' }}>₹{Number(adv.totalAmount || 0).toLocaleString()}</td>
+                              <td style={{ padding: '6px 4px' }}>₹{Number(adv.monthlyAdjustment || 0).toLocaleString()}</td>
+                              <td style={{ padding: '6px 4px', fontWeight: '600', color: advanceBalance(adv) > 0 ? '#1d4ed8' : '#16a34a' }}>
+                                {advanceBalance(adv) > 0 ? `₹${advanceBalance(adv).toLocaleString()}` : 'Closed'}
+                              </td>
+                              <td style={{ padding: '6px 4px', color: '#64748b' }}>{adv.description || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div style={styles.modalFooter}>

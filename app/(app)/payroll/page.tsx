@@ -49,7 +49,7 @@ export default function PayrollPage() {
   const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
   const [showPayslip, setShowPayslip] = useState(false);
   const [deductionEntry, setDeductionEntry] = useState<PayrollEntry | null>(null);
-  const [deductionValues, setDeductionValues] = useState<{ pf: number; esic: number; pt: number; mlwf: number; other: number; refund: number }>({ pf: 0, esic: 0, pt: 0, mlwf: 0, other: 0, refund: 0 });
+  const [deductionValues, setDeductionValues] = useState<{ pf: number; esic: number; pt: number; mlwf: number; other: number; loan: number; advance: number; refund: number }>({ pf: 0, esic: 0, pt: 0, mlwf: 0, other: 0, loan: 0, advance: 0, refund: 0 });
 
   const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth) + 1;
   const years = [2024, 2025, 2026];
@@ -253,6 +253,8 @@ export default function PayrollPage() {
     if (calc.esicDeduction > 0) deductionsData.push(['ESIC', calc.esicDeduction]);
     if (calc.tdsDeduction > 0) deductionsData.push(['Income Tax', calc.tdsDeduction]);
     if (calc.lopDeduction > 0) deductionsData.push(['LOP Deduction', calc.lopDeduction]);
+    if (calc.loanDeduction > 0) deductionsData.push(['Loan Recovery', calc.loanDeduction]);
+    if (calc.advanceDeduction > 0) deductionsData.push(['Advance Recovery', calc.advanceDeduction]);
     if (calc.otherDeductions > 0) deductionsData.push(['Other Deductions', calc.otherDeductions]);
 
     const rowCount = Math.max(earningsData.length, deductionsData.length);
@@ -374,6 +376,8 @@ export default function PayrollPage() {
       pt: entry.ptDeduction || 0,
       mlwf: entry.mlwfDeduction || 0,
       other: entry.otherDeductions || 0,
+      loan: entry.loanDeduction || 0,
+      advance: entry.advanceDeduction || 0,
       refund: entry.refundAmount || 0,
     });
     setDeductionEntry(entry);
@@ -382,7 +386,7 @@ export default function PayrollPage() {
   const saveDeductions = () => {
     if (!deductionEntry) return;
     const v = deductionValues;
-    const totalDeductions = v.pf + v.esic + v.pt + v.mlwf + v.other;
+    const totalDeductions = v.pf + v.esic + v.pt + v.mlwf + v.other + v.loan + v.advance;
     const netSalary = Math.round((deductionEntry.totalEarnings || 0) - totalDeductions + v.refund);
     dataService.updatePayroll(deductionEntry.id, {
       pfDeduction: v.pf,
@@ -390,6 +394,8 @@ export default function PayrollPage() {
       ptDeduction: v.pt,
       mlwfDeduction: v.mlwf,
       otherDeductions: v.other,
+      loanDeduction: v.loan,
+      advanceDeduction: v.advance,
       refundAmount: v.refund,
       totalDeductions,
       netSalary,
@@ -579,6 +585,8 @@ export default function PayrollPage() {
               <th style={styles.th}>Gross</th>
               <th style={styles.th}>Overtime</th>
               <th style={styles.th}>Deductions</th>
+              <th style={styles.th}>Loan</th>
+              <th style={styles.th}>Advance</th>
               <th style={styles.th}>Net Salary</th>
               <th style={styles.th}>Status</th>
               <th style={styles.th}>Actions</th>
@@ -612,6 +620,16 @@ export default function PayrollPage() {
                   </td>
                   <td style={styles.td}>
                     <span style={styles.deduction}>-₹{entry.totalDeductions.toLocaleString()}</span>
+                  </td>
+                  <td style={styles.td}>
+                    {(entry.loanDeduction || 0) > 0
+                      ? <span style={{ color: '#ef4444', fontWeight: '600' }}>-₹{(entry.loanDeduction || 0).toLocaleString()}</span>
+                      : <span style={{ color: '#94a3b8' }}>-</span>}
+                  </td>
+                  <td style={styles.td}>
+                    {(entry.advanceDeduction || 0) > 0
+                      ? <span style={{ color: '#ef4444', fontWeight: '600' }}>-₹{(entry.advanceDeduction || 0).toLocaleString()}</span>
+                      : <span style={{ color: '#94a3b8' }}>-</span>}
                   </td>
                   <td style={styles.td}>
                     <span style={styles.netSalary}>₹{entry.netSalary.toLocaleString()}</span>
@@ -701,6 +719,8 @@ export default function PayrollPage() {
         if (previewCalc.esicDeduction > 0) previewDeductions.push(['ESIC', previewCalc.esicDeduction]);
         if (previewCalc.tdsDeduction > 0) previewDeductions.push(['Income Tax', previewCalc.tdsDeduction]);
         if (previewCalc.lopDeduction > 0) previewDeductions.push(['LOP Deduction', previewCalc.lopDeduction]);
+        if (previewCalc.loanDeduction > 0) previewDeductions.push(['Loan Recovery', previewCalc.loanDeduction]);
+        if (previewCalc.advanceDeduction > 0) previewDeductions.push(['Advance Recovery', previewCalc.advanceDeduction]);
         if (previewCalc.otherDeductions > 0) previewDeductions.push(['Other Deductions', previewCalc.otherDeductions]);
 
         const previewRowCount = Math.max(previewEarnings.length, previewDeductions.length);
@@ -826,7 +846,7 @@ export default function PayrollPage() {
 
       {deductionEntry && (() => {
         const emp = employees.find(e => e.id === deductionEntry.employeeId);
-        const numInput = (label: string, key: 'pf' | 'esic' | 'pt' | 'mlwf' | 'other' | 'refund') => (
+        const numInput = (label: string, key: 'pf' | 'esic' | 'pt' | 'mlwf' | 'other' | 'loan' | 'advance' | 'refund') => (
           <div style={{ marginBottom: '12px' }}>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>{label}</label>
             <input
@@ -837,7 +857,7 @@ export default function PayrollPage() {
             />
           </div>
         );
-        const totalDed = deductionValues.pf + deductionValues.esic + deductionValues.pt + deductionValues.mlwf + deductionValues.other;
+        const totalDed = deductionValues.pf + deductionValues.esic + deductionValues.pt + deductionValues.mlwf + deductionValues.other + deductionValues.loan + deductionValues.advance;
         const newNet = Math.round((deductionEntry.totalEarnings || 0) - totalDed + deductionValues.refund);
         return (
           <div style={styles.modalOverlay} onClick={() => setDeductionEntry(null)}>
@@ -853,6 +873,8 @@ export default function PayrollPage() {
                 {numInput('ESIC Deduction (₹)', 'esic')}
                 {numInput('Professional Tax (₹)', 'pt')}
                 {numInput('MLWF (₹)', 'mlwf')}
+                {numInput('Loan Recovery (₹)', 'loan')}
+                {numInput('Advance Recovery (₹)', 'advance')}
                 {numInput('Other Deductions (₹)', 'other')}
                 {numInput('Refund (+) (₹)', 'refund')}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '8px', marginTop: '4px' }}>

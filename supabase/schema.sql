@@ -62,6 +62,7 @@ create table if not exists employees (
   "pincode" text,
   "emergencyContact" text,
   "emergencyPhone" text,
+  "fatherName" text,
   "dateOfBirth" text,
   "gender" text,
   "documents" jsonb default '{}',
@@ -138,6 +139,8 @@ create table if not exists payroll (
   "ptDeduction" numeric default 0,
   "mlwfDeduction" numeric default 0,
   "otherDeductions" numeric default 0,
+  "loanDeduction" numeric default 0,
+  "advanceDeduction" numeric default 0,
   "totalDeductions" numeric default 0,
   "refundAmount" numeric default 0,
   "netSalary" numeric default 0,
@@ -151,6 +154,59 @@ create table if not exists payroll (
 
 create index if not exists idx_payroll_emp on payroll ("employeeId");
 create index if not exists idx_payroll_month on payroll ("month", "year");
+
+-- ============================================================
+-- EMPLOYEE LOANS & ADVANCES
+-- ============================================================
+create table if not exists employee_loans (
+  "id" text primary key,
+  "employeeId" text not null,
+  "loanDate" text,
+  "totalAmount" numeric default 0,
+  "monthlyRecovery" numeric default 0,
+  "description" text,
+  "isActive" boolean default true,
+  "createdAt" text
+);
+
+create index if not exists idx_employee_loans_emp on employee_loans ("employeeId");
+
+create table if not exists loan_recoveries (
+  "id" text primary key,
+  "loanId" text not null,
+  "amount" numeric default 0,
+  "month" text,
+  "year" integer,
+  "payrollId" text
+);
+
+create index if not exists idx_loan_recoveries_loan on loan_recoveries ("loanId");
+create index if not exists idx_loan_recoveries_payroll on loan_recoveries ("payrollId");
+
+create table if not exists employee_advances (
+  "id" text primary key,
+  "employeeId" text not null,
+  "advanceDate" text,
+  "totalAmount" numeric default 0,
+  "monthlyAdjustment" numeric default 0,
+  "description" text,
+  "isActive" boolean default true,
+  "createdAt" text
+);
+
+create index if not exists idx_employee_advances_emp on employee_advances ("employeeId");
+
+create table if not exists advance_adjustments (
+  "id" text primary key,
+  "advanceId" text not null,
+  "amount" numeric default 0,
+  "month" text,
+  "year" integer,
+  "payrollId" text
+);
+
+create index if not exists idx_advance_adjustments_adv on advance_adjustments ("advanceId");
+create index if not exists idx_advance_adjustments_payroll on advance_adjustments ("payrollId");
 
 -- ============================================================
 -- LEAVES

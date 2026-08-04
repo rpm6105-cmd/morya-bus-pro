@@ -52,6 +52,8 @@ export interface PayrollCalcResult {
   ptDeduction: number;
   mlwfDeduction: number;
   otherDeductions: number;
+  loanDeduction: number;
+  advanceDeduction: number;
   refundAmount: number;
   totalDeductions: number;
   netSalary: number;
@@ -163,6 +165,8 @@ export interface PayrollInput {
   year: number;
   deductions?: PayrollDeductionOverride;
   foodIncentive?: number;
+  loanDeduction?: number;
+  advanceDeduction?: number;
 }
 
 export function calculatePayroll({
@@ -176,6 +180,8 @@ export function calculatePayroll({
   year,
   deductions,
   foodIncentive,
+  loanDeduction,
+  advanceDeduction,
 }: PayrollInput): PayrollCalcResult {
   const summary = summarizeAttendance(attendanceRecords, month, year);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -233,8 +239,10 @@ export function calculatePayroll({
   const otherDeductions = deductions ? deductions.other : 0;
   const refundAmount = deductions ? deductions.refund : 0;
   const tdsDeduction = 0;
+  const loanD = Math.max(0, loanDeduction || 0);
+  const advanceD = Math.max(0, advanceDeduction || 0);
 
-  const totalDeductions = pfDeduction + esicDeduction + tdsDeduction + ptDeduction + mlwfDeduction + otherDeductions;
+  const totalDeductions = pfDeduction + esicDeduction + tdsDeduction + ptDeduction + mlwfDeduction + otherDeductions + loanD + advanceD;
   const netSalary = Math.round(totalEarnings - totalDeductions + refundAmount);
 
   return {
@@ -278,6 +286,8 @@ export function calculatePayroll({
     ptDeduction,
     mlwfDeduction,
     otherDeductions,
+    loanDeduction: loanD,
+    advanceDeduction: advanceD,
     refundAmount,
     totalDeductions,
     netSalary,

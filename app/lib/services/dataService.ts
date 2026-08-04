@@ -4,7 +4,8 @@ import {
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
   IncentiveTier, User, EmployeeChangeRequest, AppNotification, NotificationType,
-  ChangeRequestAction, SalaryMaster, BankMaster, Designation, PayrollDeductionOverride, AttendanceStatus
+  ChangeRequestAction, SalaryMaster, BankMaster, Designation, PayrollDeductionOverride, AttendanceStatus,
+  EmployeeLoan, LoanRecovery, EmployeeAdvance, AdvanceAdjustment, LoanAdvanceSummary
 } from '../types';
 import { normalizeAadhaar } from '../utils/incentive';
 import { calculatePayroll as payrollCalc } from '../utils/payrollCalc';
@@ -26,6 +27,10 @@ const NOTIFICATIONS_KEY = 'hrms_notifications';
 const SALARY_MASTERS_KEY = 'hrms_salary_masters';
 const BANK_MASTERS_KEY = 'hrms_bank_masters';
 const DESIGNATIONS_KEY = 'hrms_designations';
+const LOANS_KEY = 'hrms_loans';
+const LOAN_RECOVERIES_KEY = 'hrms_loan_recoveries';
+const ADVANCES_KEY = 'hrms_advances';
+const ADVANCE_ADJUSTMENTS_KEY = 'hrms_advance_adjustments';
 
 const DEFAULT_SETTINGS: SystemSettings = {
   pfRate: 12,
@@ -63,6 +68,10 @@ class DataService {
   private salaryMasters: SalaryMaster[] = [];
   private bankMasters: BankMaster[] = [];
   private designations: Designation[] = [];
+  private loans: EmployeeLoan[] = [];
+  private loanRecoveries: LoanRecovery[] = [];
+  private advances: EmployeeAdvance[] = [];
+  private advanceAdjustments: AdvanceAdjustment[] = [];
   private settings: SystemSettings = { ...DEFAULT_SETTINGS };
 
   async initialize(): Promise<boolean> {
@@ -115,6 +124,10 @@ class DataService {
       const salaryMasters = localStorage.getItem(SALARY_MASTERS_KEY);
       const bankMasters = localStorage.getItem(BANK_MASTERS_KEY);
       const designations = localStorage.getItem(DESIGNATIONS_KEY);
+      const loans = localStorage.getItem(LOANS_KEY);
+      const loanRecoveries = localStorage.getItem(LOAN_RECOVERIES_KEY);
+      const advances = localStorage.getItem(ADVANCES_KEY);
+      const advanceAdjustments = localStorage.getItem(ADVANCE_ADJUSTMENTS_KEY);
 
       this.branches = branches ? JSON.parse(branches) : this.generateBranches();
       this.employees = employees ? JSON.parse(employees) : this.generateEmployees();
@@ -131,6 +144,10 @@ class DataService {
       this.salaryMasters = salaryMasters ? JSON.parse(salaryMasters) : [];
       this.bankMasters = bankMasters ? JSON.parse(bankMasters) : [];
       this.designations = designations ? JSON.parse(designations) : [];
+      this.loans = loans ? JSON.parse(loans) : [];
+      this.loanRecoveries = loanRecoveries ? JSON.parse(loanRecoveries) : [];
+      this.advances = advances ? JSON.parse(advances) : [];
+      this.advanceAdjustments = advanceAdjustments ? JSON.parse(advanceAdjustments) : [];
       this.settings = settings ? { ...DEFAULT_SETTINGS, ...JSON.parse(settings) } : { ...DEFAULT_SETTINGS };
     } catch (e) {
       console.error('Failed to load local cache', e);
@@ -138,7 +155,7 @@ class DataService {
   }
 
   private async loadAllFromSupabase() {
-    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users', 'employee_change_requests', 'notifications', 'salary_masters', 'bank_master', 'designations'];
+    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users', 'employee_change_requests', 'notifications', 'salary_masters', 'bank_master', 'designations', 'employee_loans', 'loan_recoveries', 'employee_advances', 'advance_adjustments'];
     const results = await Promise.all(
       tableNames.map(t => supabase.from(t).select('*').limit(100000))
     );
@@ -163,6 +180,10 @@ class DataService {
     this.salaryMasters = data.salary_masters || [];
     this.bankMasters = data.bank_master || [];
     this.designations = data.designations || [];
+    this.loans = data.employee_loans || [];
+    this.loanRecoveries = data.loan_recoveries || [];
+    this.advances = data.employee_advances || [];
+    this.advanceAdjustments = data.advance_adjustments || [];
 
     const attendanceMap: Attendance = {};
     data.attendance.forEach((row: any) => {
@@ -219,6 +240,10 @@ class DataService {
       localStorage.setItem(SALARY_MASTERS_KEY, JSON.stringify(this.salaryMasters));
       localStorage.setItem(BANK_MASTERS_KEY, JSON.stringify(this.bankMasters));
       localStorage.setItem(DESIGNATIONS_KEY, JSON.stringify(this.designations));
+      localStorage.setItem(LOANS_KEY, JSON.stringify(this.loans));
+      localStorage.setItem(LOAN_RECOVERIES_KEY, JSON.stringify(this.loanRecoveries));
+      localStorage.setItem(ADVANCES_KEY, JSON.stringify(this.advances));
+      localStorage.setItem(ADVANCE_ADJUSTMENTS_KEY, JSON.stringify(this.advanceAdjustments));
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
     } catch (e) {
       console.error('Failed to write local cache', e);
@@ -1347,6 +1372,7 @@ class DataService {
     const salaryMaster = this.getSalaryMasterForEmployee(employee.id, monthKey);
     const attendanceRecords = this.getAttendance(employee.id, month, year) as Record<string, AttendanceRecord>;
     const overtimeEntries = this.getOvertime(employee.id, month, year);
+    const loanSummary = this.getLoanAdvanceSummary(employee.id, monthKey);
     const calc = payrollCalc({
       employee,
       salaryMaster,
@@ -1358,6 +1384,8 @@ class DataService {
       year,
       deductions,
       foodIncentive,
+      loanDeduction: loanSummary.loanMonthly,
+      advanceDeduction: loanSummary.advanceMonthly,
     });
 
     return {
@@ -1392,6 +1420,8 @@ class DataService {
       ptDeduction: calc.ptDeduction,
       mlwfDeduction: calc.mlwfDeduction,
       otherDeductions: calc.otherDeductions,
+      loanDeduction: calc.loanDeduction,
+      advanceDeduction: calc.advanceDeduction,
       refundAmount: calc.refundAmount,
       totalDeductions: calc.totalDeductions,
       netSalary: calc.netSalary,
@@ -1471,6 +1501,7 @@ class DataService {
       approvedAt: now,
     };
     this.cache();
+    this.recordRecoveriesForEntry(this.payroll[index]);
     this.persistRows('payroll', [this.payroll[index]], ['id']);
     this.notifyPayrollChanged();
     return this.payroll[index];
@@ -1487,9 +1518,237 @@ class DataService {
       paidAt: now,
     };
     this.cache();
+    this.recordRecoveriesForEntry(this.payroll[index]);
     this.persistRows('payroll', [this.payroll[index]], ['id']);
     this.notifyPayrollChanged();
     return this.payroll[index];
+  }
+
+  getLoans(employeeId?: string): EmployeeLoan[] {
+    this.ensureData();
+    let filtered = this.loans;
+    if (employeeId) filtered = filtered.filter(l => l.employeeId === employeeId);
+    return [...filtered].sort((a, b) => (a.loanDate || '').localeCompare(b.loanDate || ''));
+  }
+
+  getAdvances(employeeId?: string): EmployeeAdvance[] {
+    this.ensureData();
+    let filtered = this.advances;
+    if (employeeId) filtered = filtered.filter(a => a.employeeId === employeeId);
+    return [...filtered].sort((a, b) => (a.advanceDate || '').localeCompare(b.advanceDate || ''));
+  }
+
+  getLoanRecoveries(loanId?: string): LoanRecovery[] {
+    this.ensureData();
+    if (loanId) return this.loanRecoveries.filter(r => r.loanId === loanId);
+    return this.loanRecoveries;
+  }
+
+  getAdvanceAdjustments(advanceId?: string): AdvanceAdjustment[] {
+    this.ensureData();
+    if (advanceId) return this.advanceAdjustments.filter(r => r.advanceId === advanceId);
+    return this.advanceAdjustments;
+  }
+
+  addLoan(loan: Omit<EmployeeLoan, 'id' | 'createdAt'>): EmployeeLoan {
+    this.ensureData();
+    const newLoan: EmployeeLoan = {
+      ...loan,
+      id: `loan-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    this.loans.push(newLoan);
+    this.cache();
+    this.persistRows('employee_loans', [newLoan], ['id']);
+    return newLoan;
+  }
+
+  addAdvance(advance: Omit<EmployeeAdvance, 'id' | 'createdAt'>): EmployeeAdvance {
+    this.ensureData();
+    const newAdvance: EmployeeAdvance = {
+      ...advance,
+      id: `adv-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    this.advances.push(newAdvance);
+    this.cache();
+    this.persistRows('employee_advances', [newAdvance], ['id']);
+    return newAdvance;
+  }
+
+  private monthKeyToName(monthKey: string): { name: string; year: number } {
+    const [yearStr, monthStr] = String(monthKey || '').split('-');
+    const year = parseInt(yearStr, 10);
+    const monthIndex = parseInt(monthStr, 10);
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return { name: names[monthIndex - 1], year };
+  }
+
+  getLoanAdvanceSummary(employeeId: string, monthKey: string): LoanAdvanceSummary {
+    this.ensureData();
+    const { name: monthName, year } = this.monthKeyToName(monthKey);
+    const now = new Date().toISOString();
+    const result: LoanAdvanceSummary = { loanBalance: 0, loanMonthly: 0, advanceBalance: 0, advanceMonthly: 0 };
+
+    const activeLoans = this.loans
+      .filter(l => l.employeeId === employeeId && l.isActive !== false)
+      .sort((a, b) => (a.loanDate || a.createdAt || '').localeCompare(b.loanDate || b.createdAt || ''));
+    for (const loan of activeLoans) {
+      const recovered = this.loanRecoveries
+        .filter(r => r.loanId === loan.id)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const balance = Number(loan.totalAmount || 0) - recovered;
+      if (balance <= 0) {
+        if (loan.isActive !== false) this.updateLoanActive(loan.id, false, now);
+        continue;
+      }
+      const thisMonth = this.loanRecoveries
+        .filter(r => r.loanId === loan.id && r.month === monthName && r.year === year)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const monthly = Math.max(0, Math.min(Number(loan.monthlyRecovery || 0), balance) - thisMonth);
+      result.loanBalance += balance;
+      result.loanMonthly += monthly;
+    }
+
+    const activeAdvances = this.advances
+      .filter(a => a.employeeId === employeeId && a.isActive !== false)
+      .sort((a, b) => (a.advanceDate || a.createdAt || '').localeCompare(b.advanceDate || b.createdAt || ''));
+    for (const adv of activeAdvances) {
+      const adjusted = this.advanceAdjustments
+        .filter(r => r.advanceId === adv.id)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const balance = Number(adv.totalAmount || 0) - adjusted;
+      if (balance <= 0) {
+        if (adv.isActive !== false) this.updateAdvanceActive(adv.id, false, now);
+        continue;
+      }
+      const thisMonth = this.advanceAdjustments
+        .filter(r => r.advanceId === adv.id && r.month === monthName && r.year === year)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const monthly = Math.max(0, Math.min(Number(adv.monthlyAdjustment || 0), balance) - thisMonth);
+      result.advanceBalance += balance;
+      result.advanceMonthly += monthly;
+    }
+
+    return result;
+  }
+
+  private updateLoanActive(id: string, isActive: boolean, now: string) {
+    const index = this.loans.findIndex(l => l.id === id);
+    if (index === -1) return;
+    this.loans[index] = { ...this.loans[index], isActive, createdAt: this.loans[index].createdAt || now };
+    this.cache();
+    this.persistRows('employee_loans', [this.loans[index]], ['id']);
+  }
+
+  private updateAdvanceActive(id: string, isActive: boolean, now: string) {
+    const index = this.advances.findIndex(a => a.id === id);
+    if (index === -1) return;
+    this.advances[index] = { ...this.advances[index], isActive, createdAt: this.advances[index].createdAt || now };
+    this.cache();
+    this.persistRows('employee_advances', [this.advances[index]], ['id']);
+  }
+
+  private recordRecoveriesForEntry(entry: PayrollEntry) {
+    if (!entry || !entry.id || !entry.employeeId || !entry.month || !entry.year) return;
+
+    const hadLoanRows = this.loanRecoveries.some(r => r.payrollId === entry.id);
+    const hadAdvanceRows = this.advanceAdjustments.some(r => r.payrollId === entry.id);
+    this.loanRecoveries = this.loanRecoveries.filter(r => r.payrollId !== entry.id);
+    this.advanceAdjustments = this.advanceAdjustments.filter(r => r.payrollId !== entry.id);
+    if (hadLoanRows) this.deleteRows('loan_recoveries', 'payrollId', [entry.id]);
+    if (hadAdvanceRows) this.deleteRows('advance_adjustments', 'payrollId', [entry.id]);
+
+    const now = new Date().toISOString();
+    const ts = Date.now();
+    const loanAmount = Number(entry.loanDeduction || 0);
+    const loanRows: LoanRecovery[] = [];
+    if (loanAmount > 0) {
+      const activeLoans = this.loans
+        .filter(l => l.employeeId === entry.employeeId && l.isActive !== false)
+        .sort((a, b) => (a.loanDate || a.createdAt || '').localeCompare(b.loanDate || b.createdAt || ''));
+      let remaining = loanAmount;
+      let i = 0;
+      for (const loan of activeLoans) {
+        if (remaining <= 0) break;
+        const recovered = this.loanRecoveries
+          .filter(r => r.loanId === loan.id)
+          .reduce((s, r) => s + Number(r.amount || 0), 0);
+        const balance = Number(loan.totalAmount || 0) - recovered;
+        if (balance <= 0) continue;
+        const monthly = Math.max(0, Math.min(Number(loan.monthlyRecovery || 0), balance));
+        if (monthly <= 0) continue;
+        const take = Math.min(remaining, monthly);
+        remaining -= take;
+        loanRows.push({ id: `lr-${ts}-${i++}`, loanId: loan.id, amount: take, month: entry.month, year: entry.year, payrollId: entry.id });
+      }
+    }
+    if (loanRows.length > 0) {
+      this.loanRecoveries.push(...loanRows);
+      this.persistRows('loan_recoveries', loanRows, ['id']);
+    }
+
+    const advanceAmount = Number(entry.advanceDeduction || 0);
+    const advanceRows: AdvanceAdjustment[] = [];
+    if (advanceAmount > 0) {
+      const activeAdvances = this.advances
+        .filter(a => a.employeeId === entry.employeeId && a.isActive !== false)
+        .sort((a, b) => (a.advanceDate || a.createdAt || '').localeCompare(b.advanceDate || b.createdAt || ''));
+      let remaining = advanceAmount;
+      let i = 0;
+      for (const adv of activeAdvances) {
+        if (remaining <= 0) break;
+        const adjusted = this.advanceAdjustments
+          .filter(r => r.advanceId === adv.id)
+          .reduce((s, r) => s + Number(r.amount || 0), 0);
+        const balance = Number(adv.totalAmount || 0) - adjusted;
+        if (balance <= 0) continue;
+        const monthly = Math.max(0, Math.min(Number(adv.monthlyAdjustment || 0), balance));
+        if (monthly <= 0) continue;
+        const take = Math.min(remaining, monthly);
+        remaining -= take;
+        advanceRows.push({ id: `aa-${ts}-${i++}`, advanceId: adv.id, amount: take, month: entry.month, year: entry.year, payrollId: entry.id });
+      }
+    }
+    if (advanceRows.length > 0) {
+      this.advanceAdjustments.push(...advanceRows);
+      this.persistRows('advance_adjustments', advanceRows, ['id']);
+    }
+
+    this.reconcileLoanAdvanceActive(entry.employeeId, now);
+    this.cache();
+  }
+
+  private reconcileLoanAdvanceActive(employeeId: string, now: string) {
+    const loanChanged: EmployeeLoan[] = [];
+    this.loans.forEach((loan, i) => {
+      if (loan.employeeId !== employeeId) return;
+      const recovered = this.loanRecoveries
+        .filter(r => r.loanId === loan.id)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const balance = Number(loan.totalAmount || 0) - recovered;
+      const active = balance > 0;
+      if ((loan.isActive ?? true) !== active) {
+        this.loans[i] = { ...loan, isActive: active, createdAt: loan.createdAt || now };
+        loanChanged.push(this.loans[i]);
+      }
+    });
+    if (loanChanged.length > 0) this.persistRows('employee_loans', loanChanged, ['id']);
+
+    const advanceChanged: EmployeeAdvance[] = [];
+    this.advances.forEach((adv, i) => {
+      if (adv.employeeId !== employeeId) return;
+      const adjusted = this.advanceAdjustments
+        .filter(r => r.advanceId === adv.id)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const balance = Number(adv.totalAmount || 0) - adjusted;
+      const active = balance > 0;
+      if ((adv.isActive ?? true) !== active) {
+        this.advances[i] = { ...adv, isActive: active, createdAt: adv.createdAt || now };
+        advanceChanged.push(this.advances[i]);
+      }
+    });
+    if (advanceChanged.length > 0) this.persistRows('employee_advances', advanceChanged, ['id']);
   }
 
   private getWorkingDays(year: number, month: number): number {
@@ -1525,6 +1784,7 @@ class DataService {
       id: `pay-${Date.now()}`
     };
     this.payroll.push(newEntry);
+    this.recordRecoveriesForEntry(newEntry);
     this.cache();
     this.persistRows('payroll', [newEntry], ['id']);
     this.notifyPayrollChanged();
@@ -1536,6 +1796,7 @@ class DataService {
     const index = this.payroll.findIndex(p => p.id === id);
     if (index === -1) return null;
     this.payroll[index] = { ...this.payroll[index], ...updates };
+    this.recordRecoveriesForEntry(this.payroll[index]);
     this.cache();
     this.persistRows('payroll', [this.payroll[index]], ['id']);
     this.notifyPayrollChanged();
@@ -1621,10 +1882,14 @@ class DataService {
     this.assignments = [];
     this.changeRequests = [];
     this.notifications = [];
+    this.loans = [];
+    this.loanRecoveries = [];
+    this.advances = [];
+    this.advanceAdjustments = [];
     this.users = this.generateDefaultUsers();
     this.settings = { ...DEFAULT_SETTINGS };
     this.cache();
-    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs', 'branches', 'employees', 'subdepots', 'hrms_users', 'employee_change_requests', 'notifications'].forEach(t => this.clearTable(t));
+    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs', 'branches', 'employees', 'subdepots', 'hrms_users', 'employee_change_requests', 'notifications', 'employee_loans', 'loan_recoveries', 'employee_advances', 'advance_adjustments'].forEach(t => this.clearTable(t));
     this.persistRows('branches', this.branches, ['id']);
     this.persistRows('employees', this.employees, ['id']);
     this.persistRows('subdepots', this.subDepots, ['id']);
