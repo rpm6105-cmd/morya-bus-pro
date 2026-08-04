@@ -207,7 +207,6 @@ export async function parseSalaryWorkbook(buffer: ArrayBuffer, source: SheetSour
       if (!basic) continue;
       const base = code.replace(/-\d+$/, '');
       if (mainCodes.has(base)) continue; // partial-month supplement; main row already covers the month
-      if (code === 'MTPL/S/017') continue; // no employee exists for this code in DB (consistent with attendance import)
       const name = str(row.getCell(3).value);
       const gross = num(row.getCell(6).value);
       const net = num(row.getCell(30).value);
