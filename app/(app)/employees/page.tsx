@@ -8,12 +8,13 @@ import {
   Search, Filter, Plus, ChevronDown, ChevronUp, Edit2, Trash2, 
   Eye, Download, X, User, Mail, Phone, MapPin, Calendar,
   Briefcase, Building2, CreditCard, FileText, Award, AlertTriangle,
-  ArrowLeftRight, History, ShieldCheck, Bus, UserX
+  ArrowLeftRight, History, ShieldCheck, Bus, UserX, UploadCloud, FileSpreadsheet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import { normalizeAadhaar, formatAadhaar, isValidAadhaar } from '../../lib/utils/incentive';
+import { parseEmployeeMasterWorkbook, buildEmployeePayload, ImportResult } from '../../lib/import/employeeImport';
 
 export default function EmployeesPage() {
   const { user, isAdmin } = useAuth();
@@ -42,6 +43,12 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [aadhaarMatches, setAadhaarMatches] = useState<Employee[]>([]);
   const [rejoinChoice, setRejoinChoice] = useState<'REJOIN' | 'NEW' | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle');
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState('');
+  const [importFileName, setImportFileName] = useState('');
+  const [importStats, setImportStats] = useState<{ created: number; updated: number; skipped: number } | null>(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -61,7 +68,19 @@ export default function EmployeesPage() {
     address: '',
     emergencyContact: '',
     emergencyPhone: '',
-    status: 'ACTIVE' as Employee['status']
+    status: 'ACTIVE' as Employee['status'],
+    driverNumber: '',
+    fatherName: '',
+    maritalStatus: 'UNKNOWN' as 'MARRIED' | 'UNMARRIED' | 'UNKNOWN',
+    aadhaarName: '',
+    basicSalary: 0,
+    pfLimit: 0,
+    grossSalary: 0,
+    prevPfAccount: '',
+    prevPension: '',
+    prevPfTransfer: '',
+    prevEsic: '',
+    remarks: ''
   });
 
   const [showTransferForm, setShowTransferForm] = useState(false);
@@ -179,7 +198,19 @@ export default function EmployeesPage() {
       address: '',
       emergencyContact: '',
       emergencyPhone: '',
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      driverNumber: '',
+      fatherName: '',
+      maritalStatus: 'UNKNOWN' as 'MARRIED' | 'UNMARRIED' | 'UNKNOWN',
+      aadhaarName: '',
+      basicSalary: 0,
+      pfLimit: 0,
+      grossSalary: 0,
+      prevPfAccount: '',
+      prevPension: '',
+      prevPfTransfer: '',
+      prevEsic: '',
+      remarks: ''
     });
     setShowAddModal(true);
   };
@@ -207,7 +238,19 @@ export default function EmployeesPage() {
       address: emp.address,
       emergencyContact: emp.emergencyContact,
       emergencyPhone: emp.emergencyPhone,
-      status: emp.status
+      status: emp.status,
+      driverNumber: emp.driverNumber || '',
+      fatherName: emp.fatherName || '',
+      maritalStatus: (emp.maritalStatus || 'UNKNOWN') as 'MARRIED' | 'UNMARRIED' | 'UNKNOWN',
+      aadhaarName: emp.aadhaarName || '',
+      basicSalary: emp.basicSalary || 0,
+      pfLimit: emp.pfLimit || 0,
+      grossSalary: emp.grossSalary || 0,
+      prevPfAccount: emp.prevPfAccount || '',
+      prevPension: emp.prevPension || '',
+      prevPfTransfer: emp.prevPfTransfer || '',
+      prevEsic: emp.prevEsic || '',
+      remarks: emp.remarks || ''
     });
     setShowAddModal(true);
   };
@@ -270,7 +313,19 @@ export default function EmployeesPage() {
       photoUrl: editingEmployee?.photoUrl,
       city: editingEmployee?.city,
       state: editingEmployee?.state,
-      pincode: editingEmployee?.pincode
+      pincode: editingEmployee?.pincode,
+      driverNumber: form.driverNumber,
+      fatherName: form.fatherName,
+      maritalStatus: form.maritalStatus,
+      aadhaarName: form.aadhaarName,
+      basicSalary: form.basicSalary,
+      pfLimit: form.pfLimit,
+      grossSalary: form.grossSalary,
+      prevPfAccount: form.prevPfAccount,
+      prevPension: form.prevPension,
+      prevPfTransfer: form.prevPfTransfer,
+      prevEsic: form.prevEsic,
+      remarks: form.remarks
     };
 
     if (editingEmployee) {
@@ -447,6 +502,48 @@ export default function EmployeesPage() {
     toast.success('Offer letter generated');
   };
 
+  const handleImportFile = async (file: File) => {
+    setImportStatus('parsing');
+    setImportError('');
+    setImportResult(null);
+    setImportStats(null);
+    setImportFileName(file.name);
+    try {
+      const result = await parseEmployeeMasterWorkbook(file);
+      setImportResult(result);
+      setImportStatus('done');
+      if (result.employees.length === 0) {
+        setImportError('No employee rows found in the selected workbook.');
+      }
+    } catch (err) {
+      setImportStatus('error');
+      setImportError(err instanceof Error ? err.message : 'Failed to parse the workbook. Please ensure it is a valid Excel (.xlsx) file.');
+    }
+  };
+
+  const handleRunImport = () => {
+    if (!importResult || !isAdmin) return;
+    const validIssues = new Set(importResult.issues.map(i => i.employeeId));
+    const valid = importResult.employees.filter(e => e.employeeId && !validIssues.has(e.employeeId));
+    const byCode = new Map(employees.map(e => [e.employeeId, e]));
+    let created = 0, updated = 0, skipped = 0;
+    const defaultBranchId = branches[0]?.id || '';
+    for (const emp of valid) {
+      const existing = byCode.get(emp.employeeId);
+      if (existing) {
+        dataService.updateEmployee(existing.id, buildEmployeePayload(emp, existing.branchId) as any);
+        updated++;
+      } else {
+        dataService.addEmployee(buildEmployeePayload(emp, defaultBranchId) as any);
+        created++;
+      }
+    }
+    skipped = importResult.employees.length - valid.length;
+    setImportStats({ created, updated, skipped });
+    toast.success(`Import complete: ${created} created, ${updated} updated, ${skipped} skipped (validation issues)`);
+    loadData();
+  };
+
   const SortIcon = ({ field }: { field: keyof Employee }) => {
     if (sortField !== field) return <ChevronDown size={14} color="#94a3b8" />;
     return sortOrder === 'asc' ? <ChevronUp size={14} color="#10b981" /> : <ChevronDown size={14} color="#10b981" />;
@@ -467,6 +564,10 @@ export default function EmployeesPage() {
           <button style={styles.exportButton} onClick={handleExportCSV}>
             <Download size={16} />
             Export CSV
+          </button>
+          <button style={styles.exportButton} onClick={() => setShowImportModal(true)}>
+            <UploadCloud size={16} />
+            Import Excel
           </button>
         </div>
       </div>
@@ -768,6 +869,16 @@ export default function EmployeesPage() {
                   <div><label>UAN</label><p>{selectedEmployee.pfUanNumber || 'N/A'}</p></div>
                   <div><label>ESIC</label><p>{selectedEmployee.esicNumber || 'N/A'}</p></div>
                   <div><label>PF Enabled</label><p>{selectedEmployee.pfEnabled ? 'Yes' : 'No'}</p></div>
+                  <div><label>Driver No.</label><p>{selectedEmployee.driverNumber || 'N/A'}</p></div>
+                  <div><label>Father&apos;s Name</label><p>{selectedEmployee.fatherName || 'N/A'}</p></div>
+                  <div><label>Marital Status</label><p>{selectedEmployee.maritalStatus ? selectedEmployee.maritalStatus.charAt(0) + selectedEmployee.maritalStatus.slice(1).toLowerCase() : 'N/A'}</p></div>
+                  <div><label>Name on Aadhaar</label><p>{selectedEmployee.aadhaarName || 'N/A'}</p></div>
+                  <div><label>Basic Salary</label><p>{selectedEmployee.basicSalary ? `₹${selectedEmployee.basicSalary.toLocaleString()}` : 'N/A'}</p></div>
+                  <div><label>Gross Salary</label><p>{selectedEmployee.grossSalary ? `₹${selectedEmployee.grossSalary.toLocaleString()}` : 'N/A'}</p></div>
+                  {selectedEmployee.prevPfAccount && <div><label>Prev PF A/c</label><p>{selectedEmployee.prevPfAccount}</p></div>}
+                  {selectedEmployee.prevPension && <div><label>Prev Pension</label><p>{selectedEmployee.prevPension}</p></div>}
+                  {selectedEmployee.prevPfTransfer && <div><label>Prev PF Transfer</label><p>{selectedEmployee.prevPfTransfer}</p></div>}
+                  {selectedEmployee.prevEsic && <div><label>Prev ESIC</label><p>{selectedEmployee.prevEsic}</p></div>}
                 </div>
               </div>
               
@@ -1083,6 +1194,10 @@ export default function EmployeesPage() {
                   <input style={styles.fieldInput} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Employee full name" />
                 </div>
                 <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Father&apos;s Name</label>
+                  <input style={styles.fieldInput} value={form.fatherName} onChange={e => setForm({ ...form, fatherName: e.target.value })} placeholder="Father / spouse name" />
+                </div>
+                <div style={styles.fieldGroup}>
                   <label style={styles.fieldLabel}>Aadhaar Number * (12 digits)</label>
                   <input
                     style={{ ...styles.fieldInput, ...(form.aadharNumber && !isValidAadhaar(form.aadharNumber) ? { borderColor: '#ef4444' } : {}) }}
@@ -1113,6 +1228,14 @@ export default function EmployeesPage() {
                   </select>
                 </div>
                 <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Marital Status</label>
+                  <select style={styles.fieldInput} value={form.maritalStatus} onChange={e => setForm({ ...form, maritalStatus: e.target.value as any })}>
+                    <option value="UNKNOWN">--</option>
+                    <option value="MARRIED">Married</option>
+                    <option value="UNMARRIED">Unmarried</option>
+                  </select>
+                </div>
+                <div style={styles.fieldGroup}>
                   <label style={styles.fieldLabel}>Department</label>
                   <select style={styles.fieldInput} value={form.department} onChange={e => setForm({ ...form, department: e.target.value })}>
                     {['Drivers', 'Office Staff', 'Operations', 'Maintenance', 'Admin', 'Ticketing', 'Security', 'HR', 'Finance', 'Engineering'].map(d => (
@@ -1123,6 +1246,10 @@ export default function EmployeesPage() {
                 <div style={styles.fieldGroup}>
                   <label style={styles.fieldLabel}>Designation</label>
                   <input style={styles.fieldInput} value={form.designation} onChange={e => setForm({ ...form, designation: e.target.value })} placeholder={form.department === 'Drivers' ? 'Driver' : 'Role title'} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Driver No.</label>
+                  <input style={styles.fieldInput} value={form.driverNumber} onChange={e => setForm({ ...form, driverNumber: e.target.value })} placeholder="Driver badge number" />
                 </div>
                 <div style={styles.fieldGroup}>
                   <label style={styles.fieldLabel}>Depot *</label>
@@ -1172,6 +1299,45 @@ export default function EmployeesPage() {
                 <div style={{ ...styles.fieldGroup, gridColumn: '1 / -1' }}>
                   <label style={styles.fieldLabel}>Address</label>
                   <input style={styles.fieldInput} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Residential address" />
+                </div>
+                <div style={{ gridColumn: '1 / -1', marginTop: '8px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>PF &amp; ESIC Master</h4>
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Name on Aadhaar</label>
+                  <input style={styles.fieldInput} value={form.aadhaarName} onChange={e => setForm({ ...form, aadhaarName: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Basic Salary (₹)</label>
+                  <input style={styles.fieldInput} type="number" value={form.basicSalary || ''} onChange={e => setForm({ ...form, basicSalary: Number(e.target.value) })} placeholder="Basic component" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>PF Limit (₹)</label>
+                  <input style={styles.fieldInput} type="number" value={form.pfLimit || ''} onChange={e => setForm({ ...form, pfLimit: Number(e.target.value) })} placeholder="15000" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Gross Salary (₹)</label>
+                  <input style={styles.fieldInput} type="number" value={form.grossSalary || ''} onChange={e => setForm({ ...form, grossSalary: Number(e.target.value) })} placeholder="Total gross" />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Previous PF A/c No.</label>
+                  <input style={styles.fieldInput} value={form.prevPfAccount} onChange={e => setForm({ ...form, prevPfAccount: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Previous Pension</label>
+                  <input style={styles.fieldInput} value={form.prevPension} onChange={e => setForm({ ...form, prevPension: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Previous PF Transfer</label>
+                  <input style={styles.fieldInput} value={form.prevPfTransfer} onChange={e => setForm({ ...form, prevPfTransfer: e.target.value })} />
+                </div>
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Previous ESIC No.</label>
+                  <input style={styles.fieldInput} value={form.prevEsic} onChange={e => setForm({ ...form, prevEsic: e.target.value })} />
+                </div>
+                <div style={{ ...styles.fieldGroup, gridColumn: '1 / -1' }}>
+                  <label style={styles.fieldLabel}>Remarks</label>
+                  <input style={styles.fieldInput} value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} />
                 </div>
               </div>
 
@@ -1254,6 +1420,142 @@ export default function EmployeesPage() {
                 <Plus size={16} />
                 {editingEmployee ? (isAdmin ? 'Save Changes' : 'Submit Changes for Approval') : isAdmin ? 'Save Employee' : 'Submit for Approval'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowImportModal(false)}>
+          <div style={{ ...styles.modal, maxWidth: '680px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2>Import Employee Master (Excel)</h2>
+              <button onClick={() => setShowImportModal(false)} style={styles.closeBtn}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              {!isAdmin && (
+                <div style={{ marginBottom: '16px', padding: '10px 14px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', fontSize: '12px', color: '#92400e' }}>
+                  Only Admin can import employees. Please contact your Admin.
+                </div>
+              )}
+
+              {importStatus === 'idle' && (
+                <div>
+                  <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 12px' }}>
+                    Upload the <strong>Morya Employee details for PF &amp; ESIC</strong> workbook. All three sheets (MTPL 9MTR, KM 12MTR, Staff List Dharavi) are parsed, validated, and rows with valid codes are imported or updated.
+                  </p>
+                  <label
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px',
+                      padding: '32px 16px', border: '2px dashed #cbd5e1', borderRadius: '10px',
+                      cursor: 'pointer', background: '#f8fafc'
+                    }}
+                  >
+                    <FileSpreadsheet size={36} color="#3b82f6" />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Click to select the .xlsx file</span>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Morya Employee details for PF &amp; ESIC - Dharavi Depot.xlsx</span>
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleImportFile(f);
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {importStatus === 'parsing' && (
+                <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748b', fontSize: '13px' }}>
+                  Parsing <strong>{importFileName}</strong> ...
+                </div>
+              )}
+
+              {importStatus === 'error' && (
+                <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#b91c1c' }}>
+                  {importError}
+                </div>
+              )}
+
+              {importStatus === 'done' && importResult && (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                    {importResult.summary.map(s => (
+                      <div key={s.sheet} style={{ padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>{s.sheet}</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a' }}>{s.total}</div>
+                        <div style={{ fontSize: '11px', color: s.withIssues ? '#b91c1c' : '#16a34a' }}>
+                          {s.ok} valid{s.withIssues ? `, ${s.withIssues} issues` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {importStats ? (
+                    <div style={{ padding: '12px 16px', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: '8px', fontSize: '13px', color: '#065f46', marginBottom: '16px' }}>
+                      Import complete: <strong>{importStats.created}</strong> created, <strong>{importStats.updated}</strong> updated, <strong>{importStats.skipped}</strong> skipped.
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: '16px' }}>
+                      <button onClick={handleRunImport} style={styles.generateBtn}>
+                        <UploadCloud size={16} />
+                        Import {importResult.employees.length - importResult.issues.length} employees
+                      </button>
+                      <p style={{ fontSize: '12px', color: '#94a3b8', margin: '8px 0 0' }}>
+                        Existing codes are updated; new codes are created. Rows flagged below are skipped.
+                      </p>
+                    </div>
+                  )}
+
+                  {importResult.issues.length > 0 && (
+                    <div style={{ marginTop: '16px' }}>
+                      <h4 style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: '600', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AlertTriangle size={14} /> {importResult.issues.length} rows need manual review
+                      </h4>
+                      <div style={{ maxHeight: '220px', overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc', textAlign: 'left', color: '#64748b' }}>
+                              <th style={{ padding: '8px' }}>Sheet</th>
+                              <th style={{ padding: '8px' }}>Row</th>
+                              <th style={{ padding: '8px' }}>Employee</th>
+                              <th style={{ padding: '8px' }}>Issues</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importResult.issues.map((iss, i) => (
+                              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '6px 8px' }}>{iss.sheet}</td>
+                                <td style={{ padding: '6px 8px' }}>{iss.rowNumber}</td>
+                                <td style={{ padding: '6px 8px' }}><strong>{iss.name}</strong><br /><span style={{ fontFamily: 'monospace', fontSize: '11px' }}>{iss.employeeId || '(no code)'}</span></td>
+                                <td style={{ padding: '6px 8px', color: '#b91c1c' }}>{iss.issues.map(x => x.message).join('; ')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {importResult.duplicateIds.length > 0 && (
+                    <div style={{ marginTop: '12px', padding: '10px 14px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', fontSize: '12px', color: '#92400e' }}>
+                      <strong>Duplicate codes detected:</strong>{' '}
+                      {importResult.duplicateIds.map(d => `${d.employeeId} (${d.sheets.length}×)`).join(', ')}.
+                      Only the first occurrence will be applied.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={styles.modalFooter}>
+                <button onClick={() => setShowImportModal(false)} style={styles.cancelBtn}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

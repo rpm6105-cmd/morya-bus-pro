@@ -39,6 +39,41 @@ export interface EmployeeTransfer {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
+export type MaritalStatus = 'MARRIED' | 'UNMARRIED' | 'UNKNOWN';
+
+export interface SalaryMaster {
+  id: string;
+  employeeId: string;
+  effectiveFrom: string; // 'YYYY-MM'
+  effectiveTo?: string;
+  basic: number;
+  da: number;
+  hra: number;
+  conveyance: number;
+  washing: number;
+  medical: number;
+  otherAllowance: number;
+  gross: number;
+  perDayDivisor: number;
+  otRatePerHour: number;
+  source?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankMaster {
+  code: string; // IFSC prefix
+  name: string;
+  category?: 'PUBLIC' | 'PRIVATE' | 'COOPERATIVE' | 'PAYMENTS';
+}
+
+export interface Designation {
+  id: string;
+  name: string;
+  category?: SubDepotCategory;
+  sortOrder?: number;
+}
+
 export interface Employee {
   id: string;
   employeeId: string;
@@ -78,6 +113,20 @@ export interface Employee {
   documents: EmployeeDocuments;
   transferHistory?: EmployeeTransfer[];
   baseDepotId?: string;
+  driverNumber?: string;
+  fatherName?: string;
+  maritalStatus?: MaritalStatus;
+  aadhaarName?: string;
+  prevPfAccount?: string;
+  prevPension?: string;
+  prevPfTransfer?: string;
+  prevEsic?: string;
+  basicSalary?: number;
+  pfLimit?: number;
+  grossSalary?: number;
+  remarks?: string;
+  shift?: string;
+  weeklyOff?: string;
   createdAt: string;
   updatedAt: string;
 }

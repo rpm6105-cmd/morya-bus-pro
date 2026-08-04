@@ -4,7 +4,7 @@ import {
   Employee, Branch, Attendance, PayrollEntry, LeaveRequest, AuditLog, SystemSettings,
   AttendanceRecord, SubDepot, OvertimeEntry, EmployeeDocuments, EmployeeAssignment,
   IncentiveTier, User, EmployeeChangeRequest, AppNotification, NotificationType,
-  ChangeRequestAction
+  ChangeRequestAction, SalaryMaster, BankMaster, Designation
 } from '../types';
 import { normalizeAadhaar } from '../utils/incentive';
 import { calculatePayroll as payrollCalc } from '../utils/payrollCalc';
@@ -23,6 +23,9 @@ const ASSIGNMENTS_KEY = 'hrms_assignments';
 const USERS_KEY = 'hrms_users';
 const CHANGE_REQUESTS_KEY = 'hrms_change_requests';
 const NOTIFICATIONS_KEY = 'hrms_notifications';
+const SALARY_MASTERS_KEY = 'hrms_salary_masters';
+const BANK_MASTERS_KEY = 'hrms_bank_masters';
+const DESIGNATIONS_KEY = 'hrms_designations';
 
 const DEFAULT_SETTINGS: SystemSettings = {
   pfRate: 12,
@@ -57,6 +60,9 @@ class DataService {
   private users: User[] = [];
   private changeRequests: EmployeeChangeRequest[] = [];
   private notifications: AppNotification[] = [];
+  private salaryMasters: SalaryMaster[] = [];
+  private bankMasters: BankMaster[] = [];
+  private designations: Designation[] = [];
   private settings: SystemSettings = { ...DEFAULT_SETTINGS };
 
   async initialize(): Promise<boolean> {
@@ -106,6 +112,9 @@ class DataService {
       const users = localStorage.getItem(USERS_KEY);
       const changeRequests = localStorage.getItem(CHANGE_REQUESTS_KEY);
       const notifications = localStorage.getItem(NOTIFICATIONS_KEY);
+      const salaryMasters = localStorage.getItem(SALARY_MASTERS_KEY);
+      const bankMasters = localStorage.getItem(BANK_MASTERS_KEY);
+      const designations = localStorage.getItem(DESIGNATIONS_KEY);
 
       this.branches = branches ? JSON.parse(branches) : this.generateBranches();
       this.employees = employees ? JSON.parse(employees) : this.generateEmployees();
@@ -119,6 +128,9 @@ class DataService {
       this.users = users ? JSON.parse(users) : this.generateDefaultUsers();
       this.changeRequests = changeRequests ? JSON.parse(changeRequests) : [];
       this.notifications = notifications ? JSON.parse(notifications) : [];
+      this.salaryMasters = salaryMasters ? JSON.parse(salaryMasters) : [];
+      this.bankMasters = bankMasters ? JSON.parse(bankMasters) : [];
+      this.designations = designations ? JSON.parse(designations) : [];
       this.settings = settings ? { ...DEFAULT_SETTINGS, ...JSON.parse(settings) } : { ...DEFAULT_SETTINGS };
     } catch (e) {
       console.error('Failed to load local cache', e);
@@ -126,7 +138,7 @@ class DataService {
   }
 
   private async loadAllFromSupabase() {
-    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users', 'employee_change_requests', 'notifications'];
+    const tableNames = ['branches', 'employees', 'attendance', 'payroll', 'leaves', 'overtime', 'subdepots', 'assignments', 'audit_logs', 'hrms_users', 'employee_change_requests', 'notifications', 'salary_masters', 'bank_master', 'designations'];
     const results = await Promise.all(
       tableNames.map(t => supabase.from(t).select('*').limit(100000))
     );
@@ -148,6 +160,9 @@ class DataService {
     this.users = data.hrms_users;
     this.changeRequests = data.employee_change_requests || [];
     this.notifications = data.notifications || [];
+    this.salaryMasters = data.salary_masters || [];
+    this.bankMasters = data.bank_master || [];
+    this.designations = data.designations || [];
 
     const attendanceMap: Attendance = {};
     data.attendance.forEach((row: any) => {
@@ -201,6 +216,9 @@ class DataService {
       localStorage.setItem(USERS_KEY, JSON.stringify(this.users));
       localStorage.setItem(CHANGE_REQUESTS_KEY, JSON.stringify(this.changeRequests));
       localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(this.notifications));
+      localStorage.setItem(SALARY_MASTERS_KEY, JSON.stringify(this.salaryMasters));
+      localStorage.setItem(BANK_MASTERS_KEY, JSON.stringify(this.bankMasters));
+      localStorage.setItem(DESIGNATIONS_KEY, JSON.stringify(this.designations));
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
     } catch (e) {
       console.error('Failed to write local cache', e);
@@ -616,6 +634,77 @@ class DataService {
     this.cache();
     this.persistRows('employees', [this.employees[index]], ['id']);
     return this.employees[index];
+  }
+
+  // ============================================================
+  // SALARY MASTERS
+  // ============================================================
+
+  getSalaryMasters(employeeId?: string): SalaryMaster[] {
+    this.ensureData();
+    if (employeeId) return this.salaryMasters.filter(s => s.employeeId === employeeId);
+    return this.salaryMasters;
+  }
+
+  getSalaryMasterForEmployee(employeeId: string, effectiveFrom?: string): SalaryMaster | undefined {
+    this.ensureData();
+    const list = this.salaryMasters.filter(s => s.employeeId === employeeId).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+    if (!effectiveFrom) return list[0];
+    return list.find(s => s.effectiveFrom <= effectiveFrom && (!s.effectiveTo || s.effectiveTo >= effectiveFrom)) || list[0];
+  }
+
+  addSalaryMaster(input: Omit<SalaryMaster, 'id' | 'createdAt' | 'updatedAt'>): SalaryMaster {
+    this.ensureData();
+    const now = new Date().toISOString();
+    const master: SalaryMaster = {
+      ...input,
+      id: `sm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.salaryMasters.push(master);
+    this.cache();
+    this.persistRows('salary_masters', [master], ['id']);
+    return master;
+  }
+
+  updateSalaryMaster(id: string, updates: Partial<SalaryMaster>): SalaryMaster | null {
+    this.ensureData();
+    const index = this.salaryMasters.findIndex(s => s.id === id);
+    if (index === -1) return null;
+    this.salaryMasters[index] = { ...this.salaryMasters[index], ...updates, updatedAt: new Date().toISOString() };
+    this.cache();
+    this.persistRows('salary_masters', [this.salaryMasters[index]], ['id']);
+    return this.salaryMasters[index];
+  }
+
+  bulkUpsertSalaryMasters(rows: Omit<SalaryMaster, 'createdAt' | 'updatedAt'>[]) {
+    this.ensureData();
+    if (rows.length === 0) return;
+    const now = new Date().toISOString();
+    const withMeta = rows.map(r => ({ ...r, createdAt: now, updatedAt: now }));
+    rows.forEach(r => {
+      const existing = this.salaryMasters.findIndex(s => s.employeeId === r.employeeId && s.effectiveFrom === r.effectiveFrom);
+      if (existing >= 0) this.salaryMasters[existing] = { ...this.salaryMasters[existing], ...withMeta.find(w => w.id === r.id), updatedAt: now };
+      else this.salaryMasters.push(withMeta.find(w => w.id === r.id) as SalaryMaster);
+    });
+    this.cache();
+    this.persistRows('salary_masters', withMeta, ['id']);
+  }
+
+  // ============================================================
+  // BANK MASTER & DESIGNATIONS
+  // ============================================================
+
+  getBankMasters(): BankMaster[] {
+    this.ensureData();
+    return this.bankMasters;
+  }
+
+  getDesignations(category?: string): Designation[] {
+    this.ensureData();
+    if (category) return this.designations.filter(d => !d.category || d.category === category).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    return this.designations.slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }
 
   transferEmployee(employeeId: string, toDepotId: string, reason?: string, transferDate?: string, userId?: string): Employee | null {
