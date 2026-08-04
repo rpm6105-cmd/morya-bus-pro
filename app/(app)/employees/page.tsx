@@ -115,8 +115,8 @@ export default function EmployeesPage() {
       filtered = filtered.filter(emp =>
         emp.name.toLowerCase().includes(term) ||
         emp.employeeId.toLowerCase().includes(term) ||
-        emp.email.toLowerCase().includes(term) ||
-        emp.phone.includes(term) ||
+        (emp.email ?? '').toLowerCase().includes(term) ||
+        (emp.phone ?? '').includes(term) ||
         (emp.aadharNumber && normalizeAadhaar(emp.aadharNumber).includes(normalizeAadhaar(searchTerm)))
       );
     }
