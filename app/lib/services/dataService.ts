@@ -377,7 +377,7 @@ class DataService {
                         15000 + Math.random() * 25000;
       
       const subDepotCategory = isDriver ? 'DRIVERS' : 'STAFF';
-      const busCategory = isDriver ? (Math.random() > 0.5 ? '8 METER' : '12 METER') : undefined;
+      const busCategory = isDriver ? (Math.random() > 0.5 ? '9 METER' : '12 METER') : undefined;
 
       const joiningYear = 2015 + Math.floor(Math.random() * 10);
       const joiningMonth = Math.floor(Math.random() * 12);

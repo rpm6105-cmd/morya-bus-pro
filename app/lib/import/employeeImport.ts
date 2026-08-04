@@ -84,7 +84,7 @@ const HEADER_MAP: { key: string; match: string[] }[] = [
 ];
 
 const SHEET_KEYWORDS: { keyword: string; category: 'DRIVERS' | 'STAFF'; busCategory: string }[] = [
-  { keyword: '9MTR', category: 'DRIVERS', busCategory: '8 METER' },
+  { keyword: '9MTR', category: 'DRIVERS', busCategory: '9 METER' },
   { keyword: '12MTR', category: 'DRIVERS', busCategory: '12 METER' },
   { keyword: 'STAFF', category: 'STAFF', busCategory: '' },
 ];
@@ -276,6 +276,7 @@ export function buildEmployeePayload(e: ImportedEmployee, branchId: string): Rec
     salary: 0,
     bankAccount: e.bankAccount,
     ifscCode: e.ifscCode,
+    bankName: e.bankName,
     panNumber: e.panNumber,
     joiningDate: e.joiningDate,
     status: 'ACTIVE',

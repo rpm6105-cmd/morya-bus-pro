@@ -57,10 +57,11 @@ export default function EmployeesPage() {
     dateOfBirth: '',
     gender: 'MALE' as 'MALE' | 'FEMALE' | 'OTHER',
     department: 'Drivers',
-    busCategory: '' as '' | '8 METER' | '12 METER',
+    busCategory: '' as '' | '9 METER' | '12 METER',
     designation: '',
     branchId: '',
     salary: 18000,
+    bankName: '',
     bankAccount: '',
     ifscCode: '',
     panNumber: '',
@@ -191,6 +192,7 @@ export default function EmployeesPage() {
       designation: '',
       branchId: branches[0]?.id || '',
       salary: 18000,
+      bankName: '',
       bankAccount: '',
       ifscCode: '',
       panNumber: '',
@@ -231,6 +233,7 @@ export default function EmployeesPage() {
       designation: emp.designation,
       branchId: emp.branchId,
       salary: emp.salary,
+      bankName: emp.bankName || '',
       bankAccount: emp.bankAccount,
       ifscCode: emp.ifscCode,
       panNumber: emp.panNumber || '',
@@ -286,7 +289,7 @@ export default function EmployeesPage() {
       designation: form.designation.trim() || form.department,
       branchId: form.branchId,
       subDepotCategory,
-      busCategory: (form.busCategory as '8 METER' | '12 METER') || editingEmployee?.busCategory,
+      busCategory: (form.busCategory as '9 METER' | '12 METER') || editingEmployee?.busCategory,
       salary: form.salary,
       pfEnabled: editingEmployee?.pfEnabled ?? true,
       pfRegistrationStatus: editingEmployee?.pfRegistrationStatus ?? 'PENDING' as const,
@@ -296,7 +299,7 @@ export default function EmployeesPage() {
       esicNumber: editingEmployee?.esicNumber,
       bankAccount: form.bankAccount.trim(),
       ifscCode: form.ifscCode.trim(),
-      bankName: editingEmployee?.bankName,
+      bankName: form.bankName.trim() || editingEmployee?.bankName,
       panNumber: form.panNumber.trim() || undefined,
       aadharNumber: formatAadhaar(form.aadharNumber),
       joiningDate: form.joiningDate,
@@ -625,7 +628,7 @@ export default function EmployeesPage() {
           style={styles.select}
         >
           <option value="">All Bus Categories</option>
-          <option value="8 METER">8 Meter Bus</option>
+          <option value="9 METER">9 Meter Bus</option>
           <option value="12 METER">12 Meter Bus</option>
         </select>
       </div>
@@ -695,10 +698,10 @@ export default function EmployeesPage() {
                   {emp.busCategory ? (
                     <span style={{
                       ...styles.statusBadge,
-                      background: emp.busCategory === '8 METER' ? '#dbeafe' : '#fef3c7',
-                      color: emp.busCategory === '8 METER' ? '#1e40af' : '#92400e'
+                      background: emp.busCategory === '9 METER' ? '#dbeafe' : '#fef3c7',
+                      color: emp.busCategory === '9 METER' ? '#1e40af' : '#92400e'
                     }}>
-                      {emp.busCategory === '8 METER' ? '8M Bus' : '12M Bus'}
+                      {emp.busCategory === '9 METER' ? '9M Bus' : '12M Bus'}
                     </span>
                   ) : (
                     <span style={{ color: '#94a3b8' }}>-</span>
@@ -834,7 +837,7 @@ export default function EmployeesPage() {
                     <Bus size={18} color="#f59e0b" />
                     <div>
                       <label>Bus Category</label>
-                      <p>{selectedEmployee.busCategory === '8 METER' ? '8 Meter Bus' : '12 Meter Bus'}</p>
+                      <p>{selectedEmployee.busCategory === '9 METER' ? '9 Meter Bus' : '12 Meter Bus'}</p>
                     </div>
                   </div>
                 )}
@@ -863,6 +866,7 @@ export default function EmployeesPage() {
               <div style={styles.detailSection}>
                 <h4 style={styles.sectionTitle}>Bank & Compliance Details</h4>
                 <div style={styles.bankGrid}>
+                  <div><label>Bank Name</label><p>{selectedEmployee.bankName || 'N/A'}</p></div>
                   <div><label>Bank A/C</label><p>{selectedEmployee.bankAccount}</p></div>
                   <div><label>IFSC</label><p>{selectedEmployee.ifscCode}</p></div>
                   <div><label>PAN</label><p>{selectedEmployee.panNumber || 'N/A'}</p></div>
@@ -1277,6 +1281,10 @@ export default function EmployeesPage() {
                   </select>
                 </div>
                 <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel}>Bank Name</label>
+                  <input style={styles.fieldInput} value={form.bankName} onChange={e => setForm({ ...form, bankName: e.target.value })} placeholder="e.g. STATE BANK OF INDIA" />
+                </div>
+                <div style={styles.fieldGroup}>
                   <label style={styles.fieldLabel}>Bank Account</label>
                   <input style={styles.fieldInput} value={form.bankAccount} onChange={e => setForm({ ...form, bankAccount: e.target.value })} />
                 </div>
@@ -1400,9 +1408,9 @@ export default function EmployeesPage() {
                 <>
                   <div style={{ marginTop: '14px' }}>
                     <label style={styles.fieldLabel}>BUS CATEGORY</label>
-                    <select style={styles.fieldInput} value={form.busCategory} onChange={e => setForm({ ...form, busCategory: e.target.value as '' | '8 METER' | '12 METER' })}>
-                      <option value="">-- Select Bus Category --</option>
-                      <option value="8 METER">8 Meter Bus</option>
+                    <select style={styles.fieldInput} value={form.busCategory} onChange={e => setForm({ ...form, busCategory: e.target.value as '' | '9 METER' | '12 METER' })}>
+                      <option value="">Select Bus Category</option>
+                      <option value="9 METER">9 Meter Bus</option>
                       <option value="12 METER">12 Meter Bus</option>
                     </select>
                   </div>

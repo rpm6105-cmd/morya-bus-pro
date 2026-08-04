@@ -13,7 +13,7 @@ export interface User {
 }
 
 export type SubDepotCategory = 'STAFF' | 'DRIVERS';
-export type BusCategory = '8 METER' | '12 METER';
+export type BusCategory = '9 METER' | '12 METER';
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'TERMINATED' | 'TRANSFERRED';
 export type PfRegistrationStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';

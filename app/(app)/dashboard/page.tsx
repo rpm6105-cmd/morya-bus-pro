@@ -58,7 +58,7 @@ export default function DashboardPage() {
 
     const activeDrivers = activeEmployees.filter(e => e.subDepotCategory === 'DRIVERS');
     const busData = [
-      { name: '8 Meter', value: activeDrivers.filter(e => e.busCategory === '8 METER').length, color: '#3b82f6' },
+      { name: '9 Meter', value: activeDrivers.filter(e => e.busCategory === '9 METER').length, color: '#3b82f6' },
       { name: '12 Meter', value: activeDrivers.filter(e => e.busCategory === '12 METER').length, color: '#f59e0b' }
     ];
 
