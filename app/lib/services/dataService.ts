@@ -283,7 +283,7 @@ class DataService {
       const { error } = await supabase.from(table).delete().in(column, values);
       if (error) throw error;
     } catch (e) {
-      console.error(`Supabase delete ${table} failed`, e);
+      console.error('Supabase delete failed', table, e);
     }
   }
 
