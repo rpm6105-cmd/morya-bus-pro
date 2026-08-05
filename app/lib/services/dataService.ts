@@ -257,7 +257,7 @@ class DataService {
       const { error } = await supabase.from(table).upsert(rows, { onConflict });
       if (error) throw error;
     } catch (e) {
-      console.error(`Supabase upsert ${table} failed`, e);
+      console.error('Supabase upsert failed', table, e);
     }
   }
 
