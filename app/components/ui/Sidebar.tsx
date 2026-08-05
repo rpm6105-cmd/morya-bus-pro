@@ -61,13 +61,6 @@ const Sidebar = ({ collapsed = false, onToggle }: { collapsed?: boolean; onToggl
     router.push('/login');
   };
 
-  const handleResetData = () => {
-    if (confirm('This will reset all data. Are you sure?')) {
-      dataService.resetAllData();
-      window.location.reload();
-    }
-  };
-
   const adminMenuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'Employees', icon: Users, path: '/employees' },

@@ -11,13 +11,9 @@ interface StoreContextType {
   employees: Employee[];
   branches: Branch[];
   attendance: Attendance;
-  role: 'ADMIN' | 'HR';
-  isDemoMode: boolean;
   selectedMonth: number;
   selectedYear: number;
   
-  setRole: (role: 'ADMIN' | 'HR') => void;
-  setDemoMode: (isDemo: boolean) => void;
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   addEmployee: (emp: Employee) => void;
@@ -25,7 +21,6 @@ interface StoreContextType {
   deleteEmployee: (id: string) => void;
   updateBranch: (branch: Branch) => void;
   updateAttendance: (empId: string, date: string, status: string) => void;
-  resetData: () => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -34,8 +29,6 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [attendance, setAttendance] = useState<Attendance>({});
-  const [role, setRole] = useState<'ADMIN' | 'HR'>('ADMIN');
-  const [isDemoMode, setIsDemoMode] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -68,10 +61,6 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteEmployee = (id: string) => {
-    if (role !== 'ADMIN') {
-      toast.error('HR cannot terminate employees');
-      return;
-    }
     dataService.terminateEmployee(id);
     setEmployees(dataService.getEmployees());
     toast.success('Employee marked as Terminated (data retained)');
@@ -93,30 +82,20 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     setAttendance(dataService.getAttendance() as Attendance);
   };
 
-  const resetData = () => {
-    dataService.resetAllData();
-    window.location.reload();
-  };
-
   return (
     <StoreContext.Provider value={{
       employees,
       branches,
       attendance,
-      role,
-      isDemoMode,
       selectedMonth,
       selectedYear,
-      setRole,
-      setDemoMode: (val: boolean) => { setIsDemoMode(val); toast.success(`Demo Mode: ${val ? 'ON' : 'OFF'}`); },
       setSelectedMonth,
       setSelectedYear,
       addEmployee,
       updateEmployee,
       deleteEmployee,
       updateBranch,
-      updateAttendance,
-      resetData
+      updateAttendance
     }}>
       {children}
     </StoreContext.Provider>

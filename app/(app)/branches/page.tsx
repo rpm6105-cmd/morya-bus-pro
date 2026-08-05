@@ -15,10 +15,12 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../../lib/context/AuthContext';
 import Tooltip from '../../components/ui/Tooltip';
 
 export default function BranchesPage() {
-  const { branches, employees, updateBranch, role } = useStore();
+  const { branches, employees, updateBranch } = useStore();
+  const { isAdmin } = useAuth();
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
   const selectedBranch = branches.find(b => b.id === selectedBranchId);
@@ -109,7 +111,7 @@ export default function BranchesPage() {
                           <label className="text-muted" style={{ fontWeight: 700, fontSize: '0.75rem' }}>REWARD TYPE</label>
                           <select 
                              className="input" 
-                             disabled={role !== 'ADMIN'}
+                             disabled={!isAdmin}
                              value={selectedBranch.incentiveType}
                              onChange={(e) => updateBranch({...selectedBranch, incentiveType: e.target.value as any})}
                           >
@@ -122,7 +124,7 @@ export default function BranchesPage() {
                           <input 
                              type="number" 
                              className="input" 
-                             disabled={role !== 'ADMIN'}
+                             disabled={!isAdmin}
                              value={selectedBranch.incentiveValue}
                              onChange={(e) => updateBranch({...selectedBranch, incentiveValue: Number(e.target.value)})}
                           />

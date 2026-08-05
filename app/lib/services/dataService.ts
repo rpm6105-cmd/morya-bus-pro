@@ -1890,33 +1890,6 @@ class DataService {
     return this.settings;
   }
 
-  resetAllData() {
-    this.employees = this.generateEmployees();
-    this.branches = this.generateBranches();
-    this.subDepots = this.generateSubDepots();
-    this.attendance = {};
-    this.payroll = [];
-    this.leaves = [];
-    this.auditLogs = [];
-    this.overtimeEntries = [];
-    this.assignments = [];
-    this.changeRequests = [];
-    this.notifications = [];
-    this.loans = [];
-    this.loanRecoveries = [];
-    this.advances = [];
-    this.advanceAdjustments = [];
-    this.users = this.generateDefaultUsers();
-    this.settings = { ...DEFAULT_SETTINGS };
-    this.cache();
-    ['attendance', 'payroll', 'leaves', 'overtime', 'assignments', 'audit_logs', 'branches', 'employees', 'subdepots', 'hrms_users', 'employee_change_requests', 'notifications', 'employee_loans', 'loan_recoveries', 'employee_advances', 'advance_adjustments'].forEach(t => this.clearTable(t));
-    this.persistRows('branches', this.branches, ['id']);
-    this.persistRows('employees', this.employees, ['id']);
-    this.persistRows('subdepots', this.subDepots, ['id']);
-    this.persistRows('hrms_users', this.users, ['id']);
-    this.persistRows('system_settings', [{ key: 'app', value: this.settings }], ['key']);
-  }
-
   getAssignments(employeeId?: string): EmployeeAssignment[] {
     this.ensureData();
     if (employeeId) {
