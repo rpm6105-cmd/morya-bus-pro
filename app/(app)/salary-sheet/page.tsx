@@ -9,6 +9,7 @@ import {
   Calculator, Download, Printer, ChevronLeft, ChevronRight, FileSpreadsheet, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Tooltip from '../../components/ui/Tooltip';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -301,21 +302,25 @@ export default function SalarySheetPage() {
         </div>
         <div style={styles.headerActions}>
           <div style={styles.monthSelector}>
-            <button onClick={() => {
-              const idx = MONTHS.indexOf(selectedMonth);
-              if (idx > 0) setSelectedMonth(MONTHS[idx - 1]);
-              else { setSelectedMonth('Dec'); setSelectedYear(selectedYear - 1); }
-            }} style={styles.navBtn}>
-              <ChevronLeft size={16} />
-            </button>
+            <Tooltip label="Previous Month">
+              <button onClick={() => {
+                const idx = MONTHS.indexOf(selectedMonth);
+                if (idx > 0) setSelectedMonth(MONTHS[idx - 1]);
+                else { setSelectedMonth('Dec'); setSelectedYear(selectedYear - 1); }
+              }} style={styles.navBtn} aria-label="Previous Month">
+                <ChevronLeft size={16} />
+              </button>
+            </Tooltip>
             <span style={styles.monthLabel}>{selectedMonth} {selectedYear}</span>
-            <button onClick={() => {
-              const idx = MONTHS.indexOf(selectedMonth);
-              if (idx < 11) setSelectedMonth(MONTHS[idx + 1]);
-              else { setSelectedMonth('Jan'); setSelectedYear(selectedYear + 1); }
-            }} style={styles.navBtn}>
-              <ChevronRight size={16} />
-            </button>
+            <Tooltip label="Next Month">
+              <button onClick={() => {
+                const idx = MONTHS.indexOf(selectedMonth);
+                if (idx < 11) setSelectedMonth(MONTHS[idx + 1]);
+                else { setSelectedMonth('Jan'); setSelectedYear(selectedYear + 1); }
+              }} style={styles.navBtn} aria-label="Next Month">
+                <ChevronRight size={16} />
+              </button>
+            </Tooltip>
           </div>
           <button style={styles.exportBtn} onClick={exportExcel} disabled={rows.length === 0 || exporting}>
             <FileSpreadsheet size={16} />

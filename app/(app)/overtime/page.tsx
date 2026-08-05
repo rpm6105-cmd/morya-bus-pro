@@ -7,6 +7,7 @@ import { Employee, OvertimeEntry, OvertimeType } from '../../lib/types';
 import { format } from 'date-fns';
 import { Clock, Plus, CheckCircle, XCircle, Calendar, DollarSign, Building2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Tooltip from '../../components/ui/Tooltip';
 
 export default function OvertimePage() {
   const { user, isAdmin } = useAuth();
@@ -524,18 +525,24 @@ export default function OvertimePage() {
                           <td style={styles.td}>
                             {entry.status === 'PENDING' && (
                               <div style={{ display: 'flex', gap: '4px' }}>
-                                <button 
-                                  onClick={() => handleApprove(entry.id)} 
-                                  style={{ ...styles.iconBtn, background: '#dcfce7', color: '#166534' }}
-                                >
-                                  <CheckCircle size={14} />
-                                </button>
-                                <button 
-                                  onClick={() => handleReject(entry.id)} 
-                                  style={{ ...styles.iconBtn, background: '#fee2e2', color: '#991b1b' }}
-                                >
-                                  <XCircle size={14} />
-                                </button>
+                                <Tooltip label="Approve">
+                                  <button 
+                                    onClick={() => handleApprove(entry.id)} 
+                                    style={{ ...styles.iconBtn, background: '#dcfce7', color: '#166534' }}
+                                    aria-label={`Approve overtime for ${emp?.name || 'employee'}`}
+                                  >
+                                    <CheckCircle size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Reject">
+                                  <button 
+                                    onClick={() => handleReject(entry.id)} 
+                                    style={{ ...styles.iconBtn, background: '#fee2e2', color: '#991b1b' }}
+                                    aria-label={`Reject overtime for ${emp?.name || 'employee'}`}
+                                  >
+                                    <XCircle size={14} />
+                                  </button>
+                                </Tooltip>
                               </div>
                             )}
                           </td>

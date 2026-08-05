@@ -15,6 +15,7 @@ import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import { normalizeAadhaar, formatAadhaar, isValidAadhaar } from '../../lib/utils/incentive';
 import { parseEmployeeMasterWorkbook, buildEmployeePayload, ImportResult } from '../../lib/import/employeeImport';
+import Tooltip from '../../components/ui/Tooltip';
 
 export default function EmployeesPage() {
   const { user, isAdmin } = useAuth();
@@ -93,6 +94,8 @@ export default function EmployeesPage() {
   const [employeeLoans, setEmployeeLoans] = useState<EmployeeLoan[]>([]);
   const [employeeAdvances, setEmployeeAdvances] = useState<EmployeeAdvance[]>([]);
   const [loanAdvanceSummary, setLoanAdvanceSummary] = useState<LoanAdvanceSummary>({ loanBalance: 0, loanMonthly: 0, advanceBalance: 0, advanceMonthly: 0 });
+  const [editingLoan, setEditingLoan] = useState<EmployeeLoan | null>(null);
+  const [editingAdvance, setEditingAdvance] = useState<EmployeeAdvance | null>(null);
   const [showAddLoanForm, setShowAddLoanForm] = useState(false);
   const [showAddAdvanceForm, setShowAddAdvanceForm] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
@@ -195,6 +198,8 @@ export default function EmployeesPage() {
     setLoanAdvanceSummary(dataService.getLoanAdvanceSummary(emp.id, monthKey));
     setShowAddLoanForm(false);
     setShowAddAdvanceForm(false);
+    setEditingLoan(null);
+    setEditingAdvance(null);
   };
 
   const handleAddLoan = () => {
@@ -203,22 +208,41 @@ export default function EmployeesPage() {
     const monthly = Number(loanMonthly);
     if (!amount || amount <= 0) return toast.error('Enter a valid loan amount');
     if (!monthly || monthly <= 0) return toast.error('Enter a valid monthly recovery');
-    dataService.addLoan({
-      employeeId: selectedEmployee.id,
-      loanDate,
-      totalAmount: amount,
-      monthlyRecovery: monthly,
-      description: loanDesc || undefined
-    });
+    if (editingLoan) {
+      dataService.updateLoan(editingLoan.id, {
+        loanDate,
+        totalAmount: amount,
+        monthlyRecovery: monthly,
+        description: loanDesc || undefined
+      });
+    } else {
+      dataService.addLoan({
+        employeeId: selectedEmployee.id,
+        loanDate,
+        totalAmount: amount,
+        monthlyRecovery: monthly,
+        description: loanDesc || undefined
+      });
+    }
     const now = new Date();
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     setEmployeeLoans(dataService.getLoans(selectedEmployee.id));
     setLoanAdvanceSummary(dataService.getLoanAdvanceSummary(selectedEmployee.id, monthKey));
     setShowAddLoanForm(false);
+    setEditingLoan(null);
     setLoanAmount('');
     setLoanMonthly('');
     setLoanDesc('');
-    toast.success('Loan added');
+    toast.success(editingLoan ? 'Loan updated' : 'Loan added');
+  };
+
+  const startEditLoan = (loan: EmployeeLoan) => {
+    setEditingLoan(loan);
+    setLoanAmount(String(loan.totalAmount || ''));
+    setLoanMonthly(String(loan.monthlyRecovery || ''));
+    setLoanDate(loan.loanDate || new Date().toISOString().split('T')[0]);
+    setLoanDesc(loan.description || '');
+    setShowAddLoanForm(true);
   };
 
   const handleAddAdvance = () => {
@@ -227,22 +251,41 @@ export default function EmployeesPage() {
     const monthly = Number(advanceMonthly);
     if (!amount || amount <= 0) return toast.error('Enter a valid advance amount');
     if (!monthly || monthly <= 0) return toast.error('Enter a valid monthly adjustment');
-    dataService.addAdvance({
-      employeeId: selectedEmployee.id,
-      advanceDate,
-      totalAmount: amount,
-      monthlyAdjustment: monthly,
-      description: advanceDesc || undefined
-    });
+    if (editingAdvance) {
+      dataService.updateAdvance(editingAdvance.id, {
+        advanceDate,
+        totalAmount: amount,
+        monthlyAdjustment: monthly,
+        description: advanceDesc || undefined
+      });
+    } else {
+      dataService.addAdvance({
+        employeeId: selectedEmployee.id,
+        advanceDate,
+        totalAmount: amount,
+        monthlyAdjustment: monthly,
+        description: advanceDesc || undefined
+      });
+    }
     const now = new Date();
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     setEmployeeAdvances(dataService.getAdvances(selectedEmployee.id));
     setLoanAdvanceSummary(dataService.getLoanAdvanceSummary(selectedEmployee.id, monthKey));
     setShowAddAdvanceForm(false);
+    setEditingAdvance(null);
     setAdvanceAmount('');
     setAdvanceMonthly('');
     setAdvanceDesc('');
-    toast.success('Advance added');
+    toast.success(editingAdvance ? 'Advance updated' : 'Advance added');
+  };
+
+  const startEditAdvance = (adv: EmployeeAdvance) => {
+    setEditingAdvance(adv);
+    setAdvanceAmount(String(adv.totalAmount || ''));
+    setAdvanceMonthly(String(adv.monthlyAdjustment || ''));
+    setAdvanceDate(adv.advanceDate || new Date().toISOString().split('T')[0]);
+    setAdvanceDesc(adv.description || '');
+    setShowAddAdvanceForm(true);
   };
 
   const loanBalance = (loan: EmployeeLoan) =>
@@ -800,18 +843,26 @@ export default function EmployeesPage() {
                 </td>
                 <td style={styles.td}>
                   <div style={styles.actions}>
-                    <button onClick={() => handleViewEmployee(emp)} style={styles.actionBtn} title="View">
-                      <Eye size={16} color="#64748b" />
-                    </button>
-                    <button onClick={() => openEditModal(emp)} style={styles.actionBtn} title={isAdmin ? 'Edit' : 'Request Changes'}>
-                      <Edit2 size={16} color="#3b82f6" />
-                    </button>
-                    <button onClick={() => handleTerminateEmployee(emp)} style={styles.actionBtn} title={isAdmin ? 'Terminate (data retained)' : 'Request Termination (Admin approval)'}>
-                      <UserX size={16} color="#ef4444" />
-                    </button>
-                    <button onClick={() => generateOfferLetter(emp)} style={styles.actionBtn} title="Offer Letter">
-                      <FileText size={16} color="#10b981" />
-                    </button>
+                    <Tooltip label="View">
+                      <button onClick={() => handleViewEmployee(emp)} style={styles.actionBtn} aria-label="View">
+                        <Eye size={16} color="#64748b" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label={isAdmin ? 'Edit' : 'Request Changes'}>
+                      <button onClick={() => openEditModal(emp)} style={styles.actionBtn} aria-label={isAdmin ? 'Edit' : 'Request Changes'}>
+                        <Edit2 size={16} color="#3b82f6" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label={isAdmin ? 'Terminate' : 'Request Termination'}>
+                      <button onClick={() => handleTerminateEmployee(emp)} style={styles.actionBtn} aria-label={isAdmin ? 'Terminate employee' : 'Request termination'}>
+                        <UserX size={16} color="#ef4444" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Offer Letter">
+                      <button onClick={() => generateOfferLetter(emp)} style={styles.actionBtn} aria-label="Offer Letter">
+                        <FileText size={16} color="#10b981" />
+                      </button>
+                    </Tooltip>
                   </div>
                 </td>
               </tr>
@@ -845,9 +896,11 @@ export default function EmployeesPage() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2>Employee Details</h2>
-              <button onClick={() => setShowDetailModal(false)} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
+              <Tooltip label="Close">
+                <button onClick={() => setShowDetailModal(false)} style={styles.closeBtn} aria-label="Close">
+                  <X size={20} />
+                </button>
+              </Tooltip>
             </div>
             <div style={styles.modalBody}>
               <div style={styles.detailSection}>
@@ -1223,7 +1276,7 @@ export default function EmployeesPage() {
                                 <button 
                                   onClick={() => handleDeleteAssignment(asg.id)} 
                                   style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                                  title="Delete Assignment"
+                                  aria-label="Delete Assignment"
                                 >
                                   <Trash2 size={14} />
                                 </button>
@@ -1284,6 +1337,17 @@ export default function EmployeesPage() {
                   </div>
                   {showAddLoanForm && (
                     <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {editingLoan && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <p style={{ margin: 0, fontSize: '11px', fontWeight: '600', color: '#b45309' }}>Editing loan — total recovered stays unchanged</p>
+                          <button
+                            onClick={() => { setEditingLoan(null); setShowAddLoanForm(false); setLoanAmount(''); setLoanMonthly(''); setLoanDesc(''); }}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                         <div>
                           <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Loan Amount (₹)</label>
@@ -1329,7 +1393,7 @@ export default function EmployeesPage() {
                         onClick={handleAddLoan}
                         style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginTop: '4px' }}
                       >
-                        Save Loan
+                        {editingLoan ? 'Save Changes' : 'Save Loan'}
                       </button>
                     </div>
                   )}
@@ -1345,6 +1409,7 @@ export default function EmployeesPage() {
                             <th style={{ padding: '6px 4px' }}>Monthly</th>
                             <th style={{ padding: '6px 4px' }}>Balance</th>
                             <th style={{ padding: '6px 4px' }}>Description</th>
+                            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1357,6 +1422,17 @@ export default function EmployeesPage() {
                                 {loanBalance(loan) > 0 ? `₹${loanBalance(loan).toLocaleString()}` : 'Closed'}
                               </td>
                               <td style={{ padding: '6px 4px', color: '#64748b' }}>{loan.description || '-'}</td>
+                              <td style={{ padding: '6px 4px', textAlign: 'right' }}>
+                                <Tooltip label="Edit Loan">
+                                  <button
+                                    onClick={() => startEditLoan(loan)}
+                                    style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', padding: '2px' }}
+                                    aria-label={`Edit loan for ${selectedEmployee?.name || 'employee'}`}
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                </Tooltip>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1390,6 +1466,17 @@ export default function EmployeesPage() {
                   </div>
                   {showAddAdvanceForm && (
                     <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {editingAdvance && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <p style={{ margin: 0, fontSize: '11px', fontWeight: '600', color: '#1d4ed8' }}>Editing advance — total adjusted stays unchanged</p>
+                          <button
+                            onClick={() => { setEditingAdvance(null); setShowAddAdvanceForm(false); setAdvanceAmount(''); setAdvanceMonthly(''); setAdvanceDesc(''); }}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                         <div>
                           <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Advance Amount (₹)</label>
@@ -1435,7 +1522,7 @@ export default function EmployeesPage() {
                         onClick={handleAddAdvance}
                         style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginTop: '4px' }}
                       >
-                        Save Advance
+                        {editingAdvance ? 'Save Changes' : 'Save Advance'}
                       </button>
                     </div>
                   )}
@@ -1451,6 +1538,7 @@ export default function EmployeesPage() {
                             <th style={{ padding: '6px 4px' }}>Monthly</th>
                             <th style={{ padding: '6px 4px' }}>Balance</th>
                             <th style={{ padding: '6px 4px' }}>Description</th>
+                            <th style={{ padding: '6px 4px', textAlign: 'right' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1463,6 +1551,17 @@ export default function EmployeesPage() {
                                 {advanceBalance(adv) > 0 ? `₹${advanceBalance(adv).toLocaleString()}` : 'Closed'}
                               </td>
                               <td style={{ padding: '6px 4px', color: '#64748b' }}>{adv.description || '-'}</td>
+                              <td style={{ padding: '6px 4px', textAlign: 'right' }}>
+                                <Tooltip label="Edit Advance">
+                                  <button
+                                    onClick={() => startEditAdvance(adv)}
+                                    style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', padding: '2px' }}
+                                    aria-label={`Edit advance for ${selectedEmployee?.name || 'employee'}`}
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                </Tooltip>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1487,9 +1586,11 @@ export default function EmployeesPage() {
           <div style={{ ...styles.modal, maxWidth: '700px' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2>{editingEmployee ? `Edit Employee — ${editingEmployee.name}` : isAdmin ? 'Add New Employee' : 'Request New Employee'}</h2>
-              <button onClick={() => setShowAddModal(false)} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
+              <Tooltip label="Close">
+                <button onClick={() => setShowAddModal(false)} style={styles.closeBtn} aria-label="Close">
+                  <X size={20} />
+                </button>
+              </Tooltip>
             </div>
             <div style={styles.modalBody}>
               {editingEmployee && !isAdmin && (
@@ -1748,9 +1849,11 @@ export default function EmployeesPage() {
           <div style={{ ...styles.modal, maxWidth: '680px' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2>Import Employee Master (Excel)</h2>
-              <button onClick={() => setShowImportModal(false)} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
+              <Tooltip label="Close">
+                <button onClick={() => setShowImportModal(false)} style={styles.closeBtn} aria-label="Close">
+                  <X size={20} />
+                </button>
+              </Tooltip>
             </div>
             <div style={styles.modalBody}>
               {!isAdmin && (

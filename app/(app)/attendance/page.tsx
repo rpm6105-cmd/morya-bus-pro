@@ -16,6 +16,7 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar, Download, Upload, Users, CheckCircle, Clock, TrendingUp, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Tooltip from '../../components/ui/Tooltip';
 
 const ATTENDANCE_OPTIONS: { status: AttendanceStatus; label: string; color: string; bgColor: string; gradient: string }[] = [
   { status: 'P', label: 'Present', color: '#059669', bgColor: '#ecfdf5', gradient: 'linear-gradient(145deg, #a7f3d0, #d1fae5)' },
@@ -282,15 +283,19 @@ export default function AttendancePage() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={styles.monthNav}>
-            <button onClick={handlePrevMonth} style={styles.monthNavBtn}>
-              <ChevronLeft size={18} color="#475569" />
-            </button>
+            <Tooltip label="Previous Month">
+              <button onClick={handlePrevMonth} style={styles.monthNavBtn} aria-label="Previous Month">
+                <ChevronLeft size={18} color="#475569" />
+              </button>
+            </Tooltip>
             <span style={{ fontWeight: '700', minWidth: '130px', textAlign: 'center', fontSize: '14px', color: '#0f172a' }}>
               {format(currentDate, 'MMMM yyyy')}
             </span>
-            <button onClick={handleNextMonth} style={styles.monthNavBtn}>
-              <ChevronRight size={18} color="#475569" />
-            </button>
+            <Tooltip label="Next Month">
+              <button onClick={handleNextMonth} style={styles.monthNavBtn} aria-label="Next Month">
+                <ChevronRight size={18} color="#475569" />
+              </button>
+            </Tooltip>
           </div>
           <button onClick={autoGenerate} style={payrollLocked ? { ...styles.actionBtnOutline, opacity: 0.5, cursor: 'not-allowed' } : styles.actionBtnOutline} disabled={payrollLocked}>
             <Calendar size={16} />

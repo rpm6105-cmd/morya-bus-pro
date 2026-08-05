@@ -7,6 +7,7 @@ import Sidebar from "../components/ui/Sidebar";
 import NotificationBell from "../components/ui/NotificationBell";
 import { Menu } from "lucide-react";
 import { Toaster } from "react-hot-toast";
+import Tooltip from "../components/ui/Tooltip";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 export default function AppLayout({
@@ -30,28 +31,30 @@ export default function AppLayout({
         <ProtectedRoute>
           <div className="app-container">
             {collapsed && !isMobile && (
-              <button
-                onClick={() => setCollapsed(false)}
-                title="Expand sidebar"
-                style={{
-                  position: 'fixed',
-                  top: '14px',
-                  left: '14px',
-                  zIndex: 1060,
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '10px',
-                  background: '#0f172a',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-                }}
-              >
-                <Menu size={20} color="#fff" />
-              </button>
+              <Tooltip label="Expand Sidebar">
+                <button
+                  onClick={() => setCollapsed(false)}
+                  aria-label="Expand Sidebar"
+                  style={{
+                    position: 'fixed',
+                    top: '14px',
+                    left: '14px',
+                    zIndex: 1060,
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    background: '#0f172a',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+                  }}
+                >
+                  <Menu size={20} color="#fff" />
+                </button>
+              </Tooltip>
             )}
             <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
             <main className="main-content" style={{ marginLeft: collapsed && !isMobile ? 0 : undefined }}>

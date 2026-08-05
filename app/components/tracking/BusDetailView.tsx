@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   History
 } from 'lucide-react';
+import Tooltip from '../ui/Tooltip';
 
 interface BusDetailViewProps {
   bus: Bus;
@@ -48,12 +49,15 @@ const BusDetailView: React.FC<BusDetailViewProps> = ({ bus, onClose }) => {
           <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{bus.id} Details</h2>
           <p style={{ fontSize: '0.75rem', opacity: 0.8 }}>{bus.routeName}</p>
         </div>
-        <button 
-          onClick={onClose}
-          style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', padding: '0.5rem', color: 'white', cursor: 'pointer' }}
-        >
-          <X size={20} />
-        </button>
+        <Tooltip label="Close">
+          <button 
+            onClick={onClose}
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', padding: '0.5rem', color: 'white', cursor: 'pointer' }}
+            aria-label="Close bus details"
+          >
+            <X size={20} />
+          </button>
+        </Tooltip>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>

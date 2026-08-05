@@ -10,6 +10,7 @@ import {
   AlertCircle, Key, Users, Mail, Building2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Tooltip from '../../components/ui/Tooltip';
 
 export default function UsersPage() {
   const { isAdmin } = useAuth();
@@ -254,15 +255,21 @@ export default function UsersPage() {
                 </td>
                 <td style={styles.td}>
                   <div style={styles.actions}>
-                    <button onClick={() => handleEditUser(user)} style={styles.actionBtn} title="Edit">
-                      <Edit2 size={16} color="#3b82f6" />
-                    </button>
-                    <button onClick={() => handleToggleStatus(user.id)} style={styles.actionBtn} title="Toggle Status">
-                      {user.isActive ? <Trash2 size={16} color="#ef4444" /> : <Check size={16} color="#10b981" />}
-                    </button>
-                    <button onClick={() => handleResetPassword(user.id)} style={styles.actionBtn} title="Reset Password">
-                      <Key size={16} color="#f59e0b" />
-                    </button>
+                    <Tooltip label="Edit">
+                      <button onClick={() => handleEditUser(user)} style={styles.actionBtn} aria-label={`Edit ${user.name}`}>
+                        <Edit2 size={16} color="#3b82f6" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label={user.isActive ? 'Deactivate' : 'Activate'}>
+                      <button onClick={() => handleToggleStatus(user.id)} style={styles.actionBtn} aria-label={user.isActive ? `Deactivate ${user.name}` : `Activate ${user.name}`}>
+                        {user.isActive ? <Trash2 size={16} color="#ef4444" /> : <Check size={16} color="#10b981" />}
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Reset Password">
+                      <button onClick={() => handleResetPassword(user.id)} style={styles.actionBtn} aria-label={`Reset password for ${user.name}`}>
+                        <Key size={16} color="#f59e0b" />
+                      </button>
+                    </Tooltip>
                   </div>
                 </td>
               </tr>
@@ -276,9 +283,11 @@ export default function UsersPage() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2>{editingUser ? 'Edit User' : 'Add New User'}</h2>
-              <button onClick={() => setShowModal(false)} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
+              <Tooltip label="Close">
+                <button onClick={() => setShowModal(false)} style={styles.closeBtn} aria-label="Close">
+                  <X size={20} />
+                </button>
+              </Tooltip>
             </div>
             <div style={styles.modalBody}>
               <div style={styles.formGroup}>

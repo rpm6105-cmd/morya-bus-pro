@@ -1576,6 +1576,26 @@ class DataService {
     return newAdvance;
   }
 
+  updateLoan(id: string, updates: Partial<Omit<EmployeeLoan, 'id'>>): EmployeeLoan | null {
+    this.ensureData();
+    const index = this.loans.findIndex(l => l.id === id);
+    if (index === -1) return null;
+    this.loans[index] = { ...this.loans[index], ...updates };
+    this.cache();
+    this.persistRows('employee_loans', [this.loans[index]], ['id']);
+    return this.loans[index];
+  }
+
+  updateAdvance(id: string, updates: Partial<Omit<EmployeeAdvance, 'id'>>): EmployeeAdvance | null {
+    this.ensureData();
+    const index = this.advances.findIndex(a => a.id === id);
+    if (index === -1) return null;
+    this.advances[index] = { ...this.advances[index], ...updates };
+    this.cache();
+    this.persistRows('employee_advances', [this.advances[index]], ['id']);
+    return this.advances[index];
+  }
+
   private monthKeyToName(monthKey: string): { name: string; year: number } {
     const [yearStr, monthStr] = String(monthKey || '').split('-');
     const year = parseInt(yearStr, 10);

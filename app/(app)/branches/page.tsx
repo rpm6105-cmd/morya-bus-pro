@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import Tooltip from '../../components/ui/Tooltip';
 
 export default function BranchesPage() {
   const { branches, employees, updateBranch, role } = useStore();
@@ -95,7 +96,9 @@ export default function BranchesPage() {
                     <h3 style={{ fontSize: '1.25rem' }}>{selectedBranch.name}</h3>
                     <p className="text-muted">Cluster Logistics & Incentive Hub</p>
                  </div>
-                 <button style={{ border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => setSelectedBranchId(null)}><X size={24} /></button>
+                 <Tooltip label="Close">
+                  <button style={{ border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => setSelectedBranchId(null)} aria-label="Close branch details"><X size={24} /></button>
+                 </Tooltip>
               </header>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>

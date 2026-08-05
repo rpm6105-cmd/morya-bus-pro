@@ -9,6 +9,7 @@ import {
   X, Check, Search, Filter, Plus, Trash2, Award, Copy
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Tooltip from '../../components/ui/Tooltip';
 
 export default function DepotsPage() {
   const { user, isAdmin } = useAuth();
@@ -250,9 +251,11 @@ export default function DepotsPage() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2>{selectedBranch.name}</h2>
-              <button onClick={() => { setSelectedBranch(null); setEditingIncentive(false); }} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
+              <Tooltip label="Close">
+                <button onClick={() => { setSelectedBranch(null); setEditingIncentive(false); }} style={styles.closeBtn} aria-label="Close">
+                  <X size={20} />
+                </button>
+              </Tooltip>
             </div>
             <div style={styles.modalBody}>
               <div style={styles.detailGrid}>
@@ -346,9 +349,11 @@ export default function DepotsPage() {
                                 style={styles.input}
                                 title="Incentive amount"
                               />
-                              <button onClick={() => handleRemoveTier(tier.id)} style={styles.tierDeleteBtn} title="Remove tier">
-                                <Trash2 size={14} color="#ef4444" />
-                              </button>
+                              <Tooltip label="Remove Tier">
+                                <button onClick={() => handleRemoveTier(tier.id)} style={styles.tierDeleteBtn} aria-label={`Remove ${tier.minDays}-${tier.maxDays} days tier`}>
+                                  <Trash2 size={14} color="#ef4444" />
+                                </button>
+                              </Tooltip>
                             </div>
                           ))}
                           <button onClick={handleAddTier} style={styles.tierAddBtn}>
@@ -462,9 +467,11 @@ export default function DepotsPage() {
           <div style={{ ...styles.modal, maxWidth: '620px' }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2 style={{ margin: 0 }}>Create New Depot</h2>
-              <button onClick={() => setShowCreateModal(false)} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
+              <Tooltip label="Close">
+                <button onClick={() => setShowCreateModal(false)} style={styles.closeBtn} aria-label="Close">
+                  <X size={20} />
+                </button>
+              </Tooltip>
             </div>
             <div style={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>

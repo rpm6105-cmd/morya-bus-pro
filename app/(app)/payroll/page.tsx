@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
+import UITooltip from '../../components/ui/Tooltip';
 
 let payslipFontsLoaded = false;
 let payslipFontRegB64 = '';
@@ -440,21 +441,25 @@ export default function PayrollPage() {
         </div>
         <div style={styles.headerActions}>
           <div style={styles.monthSelector}>
-            <button onClick={() => {
-              const idx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth);
-              if (idx > 0) setSelectedMonth(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][idx - 1]);
-              else { setSelectedMonth('Dec'); setSelectedYear(selectedYear - 1); }
-            }} style={styles.navBtn}>
-              <ChevronLeft size={16} />
-            </button>
+            <UITooltip label="Previous Month">
+              <button onClick={() => {
+                const idx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth);
+                if (idx > 0) setSelectedMonth(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][idx - 1]);
+                else { setSelectedMonth('Dec'); setSelectedYear(selectedYear - 1); }
+              }} style={styles.navBtn} aria-label="Previous Month">
+                <ChevronLeft size={16} />
+              </button>
+            </UITooltip>
             <span style={styles.monthLabel}>{selectedMonth} {selectedYear}</span>
-            <button onClick={() => {
-              const idx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth);
-              if (idx < 11) setSelectedMonth(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][idx + 1]);
-              else { setSelectedMonth('Jan'); setSelectedYear(selectedYear + 1); }
-            }} style={styles.navBtn}>
-              <ChevronRight size={16} />
-            </button>
+            <UITooltip label="Next Month">
+              <button onClick={() => {
+                const idx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth);
+                if (idx < 11) setSelectedMonth(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][idx + 1]);
+                else { setSelectedMonth('Jan'); setSelectedYear(selectedYear + 1); }
+              }} style={styles.navBtn} aria-label="Next Month">
+                <ChevronRight size={16} />
+              </button>
+            </UITooltip>
           </div>
           <button style={styles.exportBtn} onClick={() => {
             const data = payrollEntries.map(p => {
@@ -551,7 +556,7 @@ export default function PayrollPage() {
             <BarChart data={chartData}>
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
+              <ChartTooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
               <Bar dataKey="gross" fill="#3b82f6" name="Gross" radius={[4, 4, 0, 0]} />
               <Bar dataKey="ot" fill="#f59e0b" name="Overtime" radius={[4, 4, 0, 0]} />
               <Bar dataKey="net" fill="#10b981" name="Net" radius={[4, 4, 0, 0]} />
@@ -645,15 +650,21 @@ export default function PayrollPage() {
                   </td>
                   <td style={styles.td}>
                     <div style={styles.actions}>
-                      <button onClick={() => generatePayslip(entry)} style={styles.actionBtn} title="Generate Payslip">
-                        <FileText size={16} color="#10b981" />
-                      </button>
-                      <button onClick={() => { setSelectedEntry(entry); setShowPayslip(true); }} style={styles.actionBtn} title="View Details">
-                        <Printer size={16} color="#3b82f6" />
-                      </button>
-                      <button onClick={() => openDeductionEditor(entry)} style={styles.actionBtn} title="Edit Deductions">
-                        <Calculator size={16} color="#8b5cf6" />
-                      </button>
+                      <UITooltip label="Generate Payslip">
+                        <button onClick={() => generatePayslip(entry)} style={styles.actionBtn} aria-label="Generate Payslip">
+                          <FileText size={16} color="#10b981" />
+                        </button>
+                      </UITooltip>
+                      <UITooltip label="View Details">
+                        <button onClick={() => { setSelectedEntry(entry); setShowPayslip(true); }} style={styles.actionBtn} aria-label="View Details">
+                          <Printer size={16} color="#3b82f6" />
+                        </button>
+                      </UITooltip>
+                      <UITooltip label="Edit Deductions">
+                        <button onClick={() => openDeductionEditor(entry)} style={styles.actionBtn} aria-label="Edit Deductions">
+                          <Calculator size={16} color="#8b5cf6" />
+                        </button>
+                      </UITooltip>
                       {entry.status === 'DRAFT' || entry.status === 'PROCESSED' ? (
                         <button onClick={() => {
                           const e = dataService.approvePayroll(entry.id, user?.id || 'admin');
